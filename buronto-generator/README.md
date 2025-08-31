@@ -49,3 +49,16 @@ Web デモ
 ----
 - 本ツールはパロディです。実在の個人・集団を攻撃する表現は避けるよう、語彙は比較的マイルドにしてあります。
 
+
+GitHub Pages
+------------
+このリポジトリは GitHub Pages で公開できるように、静的サイト用の docs/ ディレクトリに Web UI を複製しています。
+
+手順:
+1. GitHub 上のこのリポジトリの Settings を開く
+2. Pages を選択
+3. Source を「Deploy from a branch」に設定
+4. Branch を main（または既定のブランチ）、Folder を /docs に設定して Save
+
+これで https://<ユーザー名>.github.io/<リポジトリ名>/ で docs/index.html が公開されます。
+Jekyll の影響を避けるため、docs/.nojekyll を同梱しています。
