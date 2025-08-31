@@ -50,6 +50,13 @@ def _words(key: str) -> List[str]:
     return [e["word"] for e in BANKS[key]]
 
 
+def get_tags(name: str, word: str) -> List[str]:
+    for e in BANKS[name]:
+        if e["word"] == word:
+            return list(e.get("tags", []))
+    return []
+
+
 TARGETS = _words("TARGETS")
 ACTIONS = _words("ACTIONS")
 SELF_PRONOUNS = _words("SELF_PRONOUNS")
