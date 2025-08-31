@@ -55,8 +55,12 @@
       <label>強度 <input id="strength" type="range" min="0" max="1" step="0.05" value="0.6"></label>
       <label>Seed <input id="seed" type="number" placeholder="任意"></label>
       <button id="btn">生成</button>
+      <button id="share">共有リンクをコピー</button>
+      <button id="copy">結果をコピー</button>
+      <button id="dl">JSONダウンロード</button>
     </div>
     <div class="out" id="out"></div>
+    <div id="msg" style="margin-top:8px;color:var(--muted);font-size:12px;"></div>
     <footer>© 2025</footer>
   </div>
 
@@ -135,15 +139,77 @@
       return out;
     }
 
-    function run(){
-      const n = Number(document.getElementById('count').value||5);
-      const seed = document.getElementById('seed').value;
-      const strength = Number(document.getElementById('strength').value||0.6);
-      const lines = generate(n, seed, strength);
-      document.getElementById('out').textContent = lines.join('\n');
+    let lastLines = [];
+
+    function getParams(){
+      return {
+        count: Number(document.getElementById('count').value||5),
+        strength: Number(document.getElementById('strength').value||0.6),
+        seed: document.getElementById('seed').value
+      };
     }
 
+    function setParams(p){
+      if(p.count!=null) document.getElementById('count').value = p.count;
+      if(p.strength!=null) document.getElementById('strength').value = p.strength;
+      if(p.seed!=null) document.getElementById('seed').value = p.seed;
+    }
+
+    function applyFromURL(){
+      const sp = new URLSearchParams(location.search);
+      const p = {};
+      if(sp.has('count')) p.count = sp.get('count');
+      if(sp.has('strength')) p.strength = sp.get('strength');
+      if(sp.has('seed')) p.seed = sp.get('seed');
+      setParams(p);
+    }
+
+    function writeURL(){
+      const p = getParams();
+      const sp = new URLSearchParams();
+      sp.set('count', String(p.count));
+      sp.set('strength', String(p.strength));
+      if(p.seed!=='' && p.seed!=null) sp.set('seed', String(p.seed));
+      const url = `${location.pathname}?${sp.toString()}`;
+      history.replaceState(null, '', url);
+      return location.href;
+    }
+
+    function run(){
+      const {count, seed, strength} = getParams();
+      lastLines = generate(count, seed, strength);
+      document.getElementById('out').textContent = lastLines.join('\n');
+      writeURL();
+    }
+
+    async function copyShare(){
+      const href = writeURL();
+      try{ await navigator.clipboard.writeText(href); showMsg('共有リンクをコピーしました'); }
+      catch{ showMsg('クリップボードへのコピーに失敗しました'); }
+    }
+    async function copyResult(){
+      const text = (lastLines.length? lastLines : document.getElementById('out').textContent).join('\n');
+      try{ await navigator.clipboard.writeText(text); showMsg('結果をコピーしました'); }
+      catch{ showMsg('コピーに失敗しました'); }
+    }
+    function downloadJSON(){
+      const blob = new Blob([JSON.stringify({params:getParams(), lines:lastLines}, null, 2)], {type:'application/json'});
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'bront-lines.json';
+      a.click();
+      URL.revokeObjectURL(a.href);
+    }
+    function showMsg(s){ const el = document.getElementById('msg'); el.textContent = s; setTimeout(()=>{ if(el.textContent===s) el.textContent=''; }, 2500); }
+
     document.getElementById('btn').addEventListener('click', run);
+    document.getElementById('share').addEventListener('click', copyShare);
+    document.getElementById('copy').addEventListener('click', copyResult);
+    document.getElementById('dl').addEventListener('click', downloadJSON);
+    document.getElementById('count').addEventListener('input', writeURL);
+    document.getElementById('strength').addEventListener('input', writeURL);
+    document.getElementById('seed').addEventListener('input', writeURL);
+    applyFromURL();
     run();
   </script>
 </body>
