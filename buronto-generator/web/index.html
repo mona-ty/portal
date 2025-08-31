@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ブロント語ジェネレータ</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Noto Sans JP, sans-serif; margin: 24px; }
+    h1 { font-size: 1.4rem; }
+    .controls { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+    .out { margin-top: 16px; white-space: pre-wrap; border: 1px solid #ddd; padding: 12px; border-radius: 8px; background: #fafafa; }
+    input[type="range"] { width: 200px; }
+  </style>
+</head>
+<body>
+  <h1>ブロント語ジェネレータ（クライアントサイド）</h1>
+  <div class="controls">
+    <label>行数 <input id="count" type="number" min="1" max="50" value="5"></label>
+    <label>風味 <input id="strength" type="range" min="0" max="1" step="0.05" value="0.6"></label>
+    <label>Seed <input id="seed" type="number" placeholder="任意"></label>
+    <button id="btn">生成</button>
+  </div>
+  <div class="out" id="out"></div>
+
+  <script>
+    // Minimal JS port of the Python generator
+    const D = {
+      TARGETS:["その装備","そのPT","そのムーブ","その立ち回り","そのジョブ","そのビルド","その募集","そのロール","その編成","その位置取り"],
+      ACTIONS:["来る","入る","やる","突っ込む","募集する","申請する","語る"],
+      SELF_PRONOUNS:["俺","オレ","わい","ぼく(仮)"],
+      ROLES:["プロ","最強の剣士","勇者","トップランカー","廃神","エリート"],
+      POWERS:["本気","ガチ","パーフェクトフォーム","真の力","セカンドギア"],
+      RESULTS:["余裕","瞬殺","完封","世界救済","盤石","圧勝"],
+      GREETINGS:["おいィ?","やあ","こんにちは","ちっす","おはよう","聞いてくれ"],
+      SKILLS:["不滅剣","ソニックブーム","ブラッドソード","奥義・天地崩壊","アルテマ","真・連撃"],
+      WARNINGS:["ミスったら許してくれないか?","ラグあったらごめんだが?","事故ったら察してほしい","寝起きなので手加減してくれ"],
+      ADVERBS:["正直","割と","普通に","余裕で","わりかし","至極当然ながら"],
+      CLAIMS:["俺がいれば勝ち","DPSは計算上あと+300でる","ギミックは目を瞑っても避けれる","タンクもヒラもできる","詠唱見てから回避余裕"],
+      FILLERS:["まあ見てろ","というわけでよろしく","野良だと伝わらないのが難点","通は黙って理解するもの"],
+      IMPERATIVES:["ちゃんと理解してから申請するが?","動画10本見直してきてくれないか?","次はプロの動きに合わせるが?","落ち着いてから出直すが?"],
+      POSTFIXES:["冗談じゃないが?","頼んだぞ?","常識だが?","人としてどうなんだ?"],
+      EVALUATIONS:["苦労する","厳しい","論外","惜しい","方向性は良い","惜しいけどダメ"],
+      CONTRASTS:["しかし","だが","まあ","とはいえ"],
+      BOASTS:["一人で終わらせる","床を見ない","DPSを10倍にする","ミスらない","ギミック破壊する"],
+      ITEMS:["剣","アクセ","マテリア","飯","秘薬","装飾"],
+      RARITIES:["至高","伝説","UR","唯一無二","禁断","究極"],
+      VERBS:["強化","精錬","鍛造","覚醒","祝福","調整"],
+      EMOJIS:["🙂","😎","💪","⚔️","🔥","🧠"],
+      ENGLISH:["PRO","skill","move","rotation","meta","GG"],
+      KATAKANA:["テクニック","ムーブ","プレイ","シナジー","ローテ","メタ"],
+      EXCUSES:["猫がキーボード踏んだ","回線が光ってない","手が滑った","家の前で祭りしてる","指が8本しかない"],
+      POLITE:["よろしくお願いします…","すみません…","ご容赦ください…","感謝…"],
+      GAME_TERMS:["レンジ","シナジー","GCD","フレーム","タゲ","ヘイト"],
+      OPINIONS:["時代遅れ","理解されづらい","深い","簡単","難しい","人を選ぶ"],
+      DIFFERENTS:["別次元","格が違う","仕様を超越","想定外の強さ","完成されてる"],
+      TAILS:["だが?","するが?","なんだが?","わけだが?"],
+      ELLIPSIS:["…","……","………"],
+    };
+
+    function mulberry32(a){return function(){var t=a+=0x6D2B79F5;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return ((t^t>>>14)>>>0)/4294967296}}
+
+    function makeRand(seed){
+      if(seed==null || seed==='') return Math.random;
+      const f = mulberry32(Number(seed)>>>0);
+      return ()=>f();
+    }
+
+    function choice(rng, arr){ return arr[Math.floor(rng()*arr.length)]; }
+    function maybe(rng, p){ return rng() < p; }
+
+    function bronto(rng, strength){
+      function tail(s){ if(maybe(rng, 0.5*strength)) s = s.replace(/。?$/, '') + (maybe(rng,0.4)?' ':'') + choice(rng, D.TAILS); return s; }
+      function dots(s){ if(maybe(rng, 0.5*strength)) s += choice(rng, D.ELLIPSIS); return s; }
+      function greet(){ let g = choice(rng, D.GREETINGS); if(g.startsWith('おい') && maybe(rng,0.7)) g = g.replace('い','ィ'); return g; }
+      function katakana(word){ return maybe(rng, 0.5*strength) ? word + '（）' : word; }
+      function post(s){ if(maybe(rng,0.35*strength)) s = s.replaceAll('です','ですが?'); if(maybe(rng,0.25*strength)) s = s.replaceAll('ます','ますが?'); return s; }
+
+      const patterns = [
+        ()=>`${greet()} ${choice(rng,D.TARGETS)}で${choice(rng,D.ACTIONS)}とか正気か? まあ${choice(rng,D.SELF_PRONOUNS)}が${choice(rng,D.POWERS)}すれば${choice(rng,D.RESULTS)}なんだが?`,
+        ()=>dots(`${choice(rng,D.SELF_PRONOUNS)}は${katakana(choice(rng,D.ROLES))}だから${choice(rng,D.CLAIMS)}だが?`),
+        ()=>`${choice(rng,D.SKILLS)}使える${choice(rng,D.SELF_PRONOUNS)}の動き見せるが? ${choice(rng,D.WARNINGS)}`,
+        ()=>tail(`${choice(rng,D.ADVERBS)} ${choice(rng,D.CLAIMS)}。${choice(rng,D.FILLERS)}`),
+        ()=>`${choice(rng,D.IMPERATIVES)}。${choice(rng,D.POSTFIXES)}`,
+        ()=>`${choice(rng,D.TARGETS)}は${choice(rng,D.EVALUATIONS)}。${choice(rng,D.CONTRASTS)} ${choice(rng,D.SELF_PRONOUNS)}なら${choice(rng,D.BOASTS)}だが?`,
+        ()=>dots(`この${choice(rng,D.ITEMS)}は${choice(rng,D.RARITIES)}だから${choice(rng,D.VERBS)}しておいたが?`),
+        ()=>`${choice(rng,D.EMOJIS)} ${choice(rng,D.ENGLISH)}の${choice(rng,D.KATAKANA)}理解してから来いよな?`,
+        ()=>dots(`ミスったら${choice(rng,D.EXCUSES)}。${choice(rng,D.POLITE)}`),
+        ()=>`正直${choice(rng,D.GAME_TERMS)}は${choice(rng,D.OPINIONS)}。でも${choice(rng,D.SELF_PRONOUNS)}は${choice(rng,D.DIFFERENTS)}だが?`,
+      ];
+      const s = choice(rng, patterns)();
+      return post(s);
+    }
+
+    function generate(n, seed, strength){
+      const rng = makeRand(seed);
+      const out = [];
+      for(let i=0;i<n;i++) out.push(bronto(rng, strength));
+      return out;
+    }
+
+    function run(){
+      const n = Number(document.getElementById('count').value||5);
+      const seed = document.getElementById('seed').value;
+      const strength = Number(document.getElementById('strength').value||0.6);
+      const lines = generate(n, seed, strength);
+      document.getElementById('out').textContent = lines.join('\n');
+    }
+
+    document.getElementById('btn').addEventListener('click', run);
+    run();
+  </script>
+</body>
+</html>
+

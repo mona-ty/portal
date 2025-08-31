@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>シンプルTodo</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <main class="app">
+      <h1>シンプルTodo</h1>
+
+      <form id="todo-form" autocomplete="off" aria-label="Todoの追加フォーム">
+        <input id="new-todo" name="title" type="text" placeholder="やることを入力してEnter" aria-label="新しいTodo" />
+        <button type="submit" aria-label="追加">追加</button>
+      </form>
+
+      <section class="controls" aria-label="フィルターと操作">
+        <div class="filters" role="tablist" aria-label="フィルター">
+          <button class="filter is-active" data-filter="all" role="tab" aria-selected="true">すべて</button>
+          <button class="filter" data-filter="active" role="tab" aria-selected="false">未完了</button>
+          <button class="filter" data-filter="completed" role="tab" aria-selected="false">完了</button>
+        </div>
+        <div class="actions">
+          <button id="clear-completed" class="secondary">完了を一括削除</button>
+        </div>
+      </section>
+
+      <ul id="todo-list" class="todos" aria-label="Todo一覧"></ul>
+
+      <footer class="status" aria-live="polite">
+        <span id="items-left">0 件の未完了</span>
+      </footer>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+  </html>
+
