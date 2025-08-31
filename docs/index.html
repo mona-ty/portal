@@ -118,7 +118,19 @@
       function dots(s){ if(!flags.dots) return s; if(maybe(rng, 0.5*strength)) s += choice(rng, D.ELLIPSIS); return s; }
       function greet(){ return choice(rng, D.GREETINGS); }
       function katakana(word){ return maybe(rng, 0.5*strength) ? `《${word}》` : word; }
-      function post(s){ if(!flags.polite) return s; if(maybe(rng,0.35*strength)) s = s.replaceAll('です。','ですか？').replaceAll('です','ですか？'); if(maybe(rng,0.25*strength)) s = s.replaceAll('ます。','ますか？').replaceAll('ます','ますか？'); return s; }
+      function post(s){
+        if(flags.polite){
+          if(maybe(rng,0.35*strength)) s = s.replaceAll('です。','ですか？').replaceAll('です','ですか？');
+          if(maybe(rng,0.25*strength)) s = s.replaceAll('ます。','ますか？').replaceAll('ます','ますか？');
+        }
+        // 句読点・空白整形
+        s = s.replace(/\?/g,'？').replace(/!/g,'！');
+        s = s.replace(/。。/g,'。').replace(/、、/g,'、').replace(/？？/g,'？').replace(/！！/g,'！');
+        s = s.replace(/……{2,}/g,'……');
+        s = s.replace(/\s+/g,' ').trim();
+        if(!D.TAILS.some(t=>s.endsWith(t)) && !/[？！。]$/.test(s)) s += '。';
+        return s;
+      }
 
       const patterns = [
         ()=>`${greet()} ${choice(rng,D.TARGETS)}を${choice(rng,D.ACTIONS)}と思うけど？ まあ${choice(rng,D.SELF_PRONOUNS)}の${choice(rng,D.POWERS)}があれば${choice(rng,D.RESULTS)}だったけどな？`,
@@ -136,10 +148,30 @@
       return post(s);
     }
 
+    function acceptable(s){
+      if(!(s.length>=12 && s.length<=80)) return false;
+      if(/。。|、、|！！{2,}|？？{2,}/.test(s)) return false;
+      const katakana = (s.match(/[ァ-ンー]/g)||[]).length;
+      const alnum = (s.match(/[\p{L}\p{N}]/gu)||[]).length || 1;
+      if(katakana/alnum > 0.75) return false;
+      return true;
+    }
+
     function generate(n, seed, strength, flags){
       const rng = makeRand(seed);
       const out = [];
-      for(let i=0;i<n;i++) out.push(bronto(rng, strength, flags));
+      const seen = new Set();
+      for(let i=0;i<n;i++){
+        let s = '';
+        let last = '';
+        for(let k=0;k<7;k++){ last = bronto(rng, strength, flags); if(acceptable(last)){ s = last; break; } }
+        s = s || last;
+        if(seen.has(s)){
+          let alt = bronto(rng, strength, flags);
+          if(!seen.has(alt)) s = alt;
+        }
+        out.push(s); seen.add(s);
+      }
       return out;
     }
 

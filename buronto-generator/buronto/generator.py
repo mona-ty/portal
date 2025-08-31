@@ -56,56 +56,85 @@ class Generator:
                 s = s.replace("です。", "ですか？").replace("です", "ですか？")
             if self.maybe(0.25 * self.config.strength):
                 s = s.replace("ます。", "ますか？").replace("ます", "ますか？")
+        # 句読点・空白整形
+        s = (
+            s.replace("?", "？").replace("!", "！")
+            .replace("。。", "。")
+            .replace("、、", "、")
+            .replace("？？", "？")
+            .replace("！！", "！")
+        )
+        while "………" in s:
+            s = s.replace("………", "……")
+        s = " ".join(s.split())  # 連続空白の圧縮
+        # 文末の句読点付与（語尾系がないとき）
+        if not any(s.endswith(t) for t in D.TAILS) and not s.endswith(("？", "！", "。")):
+            s += "。"
         return s
 
+    # 品質チェック: 長さ・記号・カタカナ比率などの簡易判定
+    def acceptable(self, s: str) -> bool:
+        if not (12 <= len(s) <= 80):
+            return False
+        banned = ["。。", "、、", "！？！？", "？？？"]
+        if any(b in s for b in banned):
+            return False
+        # カタカナ比率が高すぎる文章を弾く
+        total = sum(c.isalnum() for c in s)
+        if total:
+            kata = sum("ァ" <= c <= "ン" or c == "ー" for c in s)
+            if kata / max(1, total) > 0.75:
+                return False
+        return True
+
     def pattern1(self) -> str:
-        target = self.choice(D.TARGETS)
-        action = self.choice(D.ACTIONS)
-        selfp = self.choice(D.SELF_PRONOUNS)
-        power = self.choice(D.POWERS)
-        result = self.choice(D.RESULTS)
+        target = D.pick("TARGETS", self.rng)
+        action = D.pick("ACTIONS", self.rng)
+        selfp = D.pick("SELF_PRONOUNS", self.rng)
+        power = D.pick("POWERS", self.rng)
+        result = D.pick("RESULTS", self.rng)
         s = f"{self.bronto_greeting()} {target}を{action}と思うけど？ まあ{selfp}の{power}があれば{result}だったけどな？"
         return s
 
     def pattern2(self) -> str:
-        selfp = self.choice(D.SELF_PRONOUNS)
-        role = self.katakana_emphasis(self.choice(D.ROLES))
-        assertion = self.choice(D.CLAIMS)
+        selfp = D.pick("SELF_PRONOUNS", self.rng)
+        role = self.katakana_emphasis(D.pick("ROLES", self.rng))
+        assertion = D.pick("CLAIMS", self.rng)
         s = f"{selfp}は{role}だから{assertion}ってことで？"
         return self.dotdot(s)
 
     def pattern3(self) -> str:
-        skill = self.choice(D.SKILLS)
-        warn = self.choice(D.WARNINGS)
-        s = f"{skill}使った{self.choice(D.SELF_PRONOUNS)}の判断は正しいよな？ {warn}"
+        skill = D.pick("SKILLS", self.rng)
+        warn = D.pick("WARNINGS", self.rng)
+        s = f"{skill}使った{D.pick('SELF_PRONOUNS', self.rng)}の判断は正しいよな？ {warn}"
         return s
 
     def pattern4(self) -> str:
-        s = f"{self.choice(D.ADVERBS)} {self.choice(D.CLAIMS)}。{self.choice(D.FILLERS)}"
+        s = f"{D.pick('ADVERBS', self.rng)} {D.pick('CLAIMS', self.rng)}。{D.pick('FILLERS', self.rng)}"
         return self.add_tail(s)
 
     def pattern5(self) -> str:
-        s = f"{self.choice(D.IMPERATIVES)}。{self.choice(D.POSTFIXES)}"
+        s = f"{D.pick('IMPERATIVES', self.rng)}。{D.pick('POSTFIXES', self.rng)}"
         return s
 
     def pattern6(self) -> str:
-        s = f"{self.choice(D.TARGETS)}は{self.choice(D.EVALUATIONS)}。{self.choice(D.CONTRASTS)} {self.choice(D.SELF_PRONOUNS)}なら{self.choice(D.BOASTS)}だが？"
+        s = f"{D.pick('TARGETS', self.rng)}は{D.pick('EVALUATIONS', self.rng)}。{D.pick('CONTRASTS', self.rng)} {D.pick('SELF_PRONOUNS', self.rng)}なら{D.pick('BOASTS', self.rng)}だが？"
         return s
 
     def pattern7(self) -> str:
-        s = f"最近{self.choice(D.ITEMS)}の{self.choice(D.RARITIES)}を{self.choice(D.VERBS)}って聞いたけど？"
+        s = f"最近{D.pick('ITEMS', self.rng)}の{D.pick('RARITIES', self.rng)}を{D.pick('VERBS', self.rng)}って聞いたけど？"
         return self.dotdot(s)
 
     def pattern8(self) -> str:
-        s = f"{self.choice(D.EMOJIS)} {self.choice(D.ENGLISH)}の{self.choice(D.KATAKANA)}が決まった気がする？"
+        s = f"{D.pick('EMOJIS', self.rng)} {D.pick('ENGLISH', self.rng)}の{D.pick('KATAKANA', self.rng)}が決まった気がする？"
         return s
 
     def pattern9(self) -> str:
-        s = f"ミスったのは{self.choice(D.EXCUSES)}。{self.choice(D.POLITE)}"
+        s = f"ミスったのは{D.pick('EXCUSES', self.rng)}。{D.pick('POLITE', self.rng)}"
         return self.dotdot(s)
 
     def pattern10(self) -> str:
-        s = f"次は{self.choice(D.GAME_TERMS)}が{self.choice(D.OPINIONS)}。つまり{self.choice(D.SELF_PRONOUNS)}は{self.choice(D.DIFFERENTS)}ってこと？"
+        s = f"次は{D.pick('GAME_TERMS', self.rng)}が{D.pick('OPINIONS', self.rng)}。つまり{D.pick('SELF_PRONOUNS', self.rng)}は{D.pick('DIFFERENTS', self.rng)}ってこと？"
         return s
 
     def generate_one(self) -> str:
@@ -115,6 +144,14 @@ class Generator:
         ]
         s = self.rng.choice(patterns)()
         return self.post_process(s)
+
+    def generate_one_filtered(self, attempts: int = 7) -> str:
+        last = ""
+        for _ in range(max(1, attempts)):
+            last = self.generate_one()
+            if self.acceptable(last):
+                return last
+        return last
 
 
 def generate(
@@ -127,4 +164,16 @@ def generate(
     polite: bool = True,
 ) -> List[str]:
     gen = Generator(Config(seed=seed, strength=strength, tail=tail, dots=dots, polite=polite))
-    return [gen.generate_one() for _ in range(n)]
+    out: List[str] = []
+    seen = set()
+    while len(out) < n:
+        s = gen.generate_one_filtered()
+        if s in seen:
+            # 重複は取り直し（最大数回）
+            s = gen.generate_one_filtered()
+            if s in seen:
+                # それでも重複なら受け入れる（無限ループ回避）
+                pass
+        out.append(s)
+        seen.add(s)
+    return out
