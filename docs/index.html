@@ -8,7 +8,6 @@
   <meta property="og:title" content="ブロント語ジェネレータ" />
   <meta property="og:description" content="ブロント語風テキストをブラウザだけで生成。シードや強度も調整可能。" />
   <meta property="og:type" content="website" />
-  <meta property="og:url" content="https://mona-ty.github.io/Bront/" />
   <meta name="twitter:card" content="summary" />
   <meta name="theme-color" content="#0b0f14" />
   <link rel="icon" href="favicon.svg" type="image/svg+xml" />
@@ -55,6 +54,9 @@
       <label>件数 <input id="count" type="number" min="1" max="50" value="5"></label>
       <label>強度 <input id="strength" type="range" min="0" max="1" step="0.05" value="0.6"></label>
       <label>Seed <input id="seed" type="number" placeholder="任意"></label>
+      <label><input id="opt-tail" type="checkbox" checked> 語尾付与</label>
+      <label><input id="opt-dots" type="checkbox" checked> 三点リーダ</label>
+      <label><input id="opt-polite" type="checkbox" checked> です/ます疑問化</label>
       <button id="btn">生成</button>
       <button id="share">共有リンクをコピー</button>
       <button id="copy">結果をコピー</button>
@@ -66,6 +68,7 @@
   </div>
 
   <script>
+    // 初期値（フェールセーフ）。起動時に data.json がロードされ上書きされます。
     const D = {
       TARGETS:["この敵","野良PT","俺のリンクシェル","あのモブ","あのジョブ","あのビルド","相手方","あのLS","固定のメンバー","集合場所"],
       ACTIONS:["釣る","焼く","寝かす","引きつける","回す","張る","退かす"],
@@ -110,12 +113,12 @@
     function choice(rng, arr){ return arr[Math.floor(rng()*arr.length)]; }
     function maybe(rng, p){ return rng() < p; }
 
-    function bronto(rng, strength){
-      function tail(s){ if(maybe(rng, 0.5*strength)) s = s.replace(/[。.]?$/, '') + (maybe(rng,0.4)?' ':'') + choice(rng, D.TAILS); return s; }
-      function dots(s){ if(maybe(rng, 0.5*strength)) s += choice(rng, D.ELLIPSIS); return s; }
+    function bronto(rng, strength, flags){
+      function tail(s){ if(!flags.tail) return s; if(maybe(rng, 0.5*strength)) s = s.replace(/[。.]?$/, '') + (maybe(rng,0.4)?' ':'') + choice(rng, D.TAILS); return s; }
+      function dots(s){ if(!flags.dots) return s; if(maybe(rng, 0.5*strength)) s += choice(rng, D.ELLIPSIS); return s; }
       function greet(){ return choice(rng, D.GREETINGS); }
       function katakana(word){ return maybe(rng, 0.5*strength) ? `《${word}》` : word; }
-      function post(s){ if(maybe(rng,0.35*strength)) s = s.replaceAll('です。','ですか？').replaceAll('です','ですか？'); if(maybe(rng,0.25*strength)) s = s.replaceAll('ます。','ますか？').replaceAll('ます','ますか？'); return s; }
+      function post(s){ if(!flags.polite) return s; if(maybe(rng,0.35*strength)) s = s.replaceAll('です。','ですか？').replaceAll('です','ですか？'); if(maybe(rng,0.25*strength)) s = s.replaceAll('ます。','ますか？').replaceAll('ます','ますか？'); return s; }
 
       const patterns = [
         ()=>`${greet()} ${choice(rng,D.TARGETS)}を${choice(rng,D.ACTIONS)}と思うけど？ まあ${choice(rng,D.SELF_PRONOUNS)}の${choice(rng,D.POWERS)}があれば${choice(rng,D.RESULTS)}だったけどな？`,
@@ -133,10 +136,10 @@
       return post(s);
     }
 
-    function generate(n, seed, strength){
+    function generate(n, seed, strength, flags){
       const rng = makeRand(seed);
       const out = [];
-      for(let i=0;i<n;i++) out.push(bronto(rng, strength));
+      for(let i=0;i<n;i++) out.push(bronto(rng, strength, flags));
       return out;
     }
 
@@ -146,7 +149,10 @@
       return {
         count: Number(document.getElementById('count').value||5),
         strength: Number(document.getElementById('strength').value||0.6),
-        seed: document.getElementById('seed').value
+        seed: document.getElementById('seed').value,
+        tail: document.getElementById('opt-tail').checked,
+        dots: document.getElementById('opt-dots').checked,
+        polite: document.getElementById('opt-polite').checked,
       };
     }
 
@@ -154,6 +160,9 @@
       if(p.count!=null) document.getElementById('count').value = p.count;
       if(p.strength!=null) document.getElementById('strength').value = p.strength;
       if(p.seed!=null) document.getElementById('seed').value = p.seed;
+      if(p.tail!=null) document.getElementById('opt-tail').checked = !!p.tail;
+      if(p.dots!=null) document.getElementById('opt-dots').checked = !!p.dots;
+      if(p.polite!=null) document.getElementById('opt-polite').checked = !!p.polite;
     }
 
     function applyFromURL(){
@@ -162,6 +171,9 @@
       if(sp.has('count')) p.count = sp.get('count');
       if(sp.has('strength')) p.strength = sp.get('strength');
       if(sp.has('seed')) p.seed = sp.get('seed');
+      if(sp.has('tail')) p.tail = sp.get('tail') === '1';
+      if(sp.has('dots')) p.dots = sp.get('dots') === '1';
+      if(sp.has('polite')) p.polite = sp.get('polite') === '1';
       setParams(p);
     }
 
@@ -171,14 +183,17 @@
       sp.set('count', String(p.count));
       sp.set('strength', String(p.strength));
       if(p.seed!=='' && p.seed!=null) sp.set('seed', String(p.seed));
+      sp.set('tail', p.tail? '1':'0');
+      sp.set('dots', p.dots? '1':'0');
+      sp.set('polite', p.polite? '1':'0');
       const url = `${location.pathname}?${sp.toString()}`;
       history.replaceState(null, '', url);
       return location.href;
     }
 
     function run(){
-      const {count, seed, strength} = getParams();
-      lastLines = generate(count, seed, strength);
+      const {count, seed, strength, tail, dots, polite} = getParams();
+      lastLines = generate(count, seed, strength, {tail, dots, polite});
       document.getElementById('out').textContent = lastLines.join('\n');
       writeURL();
     }
@@ -203,6 +218,13 @@
     }
     function showMsg(s){ const el = document.getElementById('msg'); el.textContent = s; setTimeout(()=>{ if(el.textContent===s) el.textContent=''; }, 2500); }
 
+    async function loadData(){
+      try{
+        const res = await fetch('data.json', {cache:'no-cache'});
+        if(res.ok){ Object.assign(D, await res.json()); }
+      }catch(e){ /* ignore */ }
+    }
+
     document.getElementById('btn').addEventListener('click', run);
     document.getElementById('share').addEventListener('click', copyShare);
     document.getElementById('copy').addEventListener('click', copyResult);
@@ -210,8 +232,11 @@
     document.getElementById('count').addEventListener('input', writeURL);
     document.getElementById('strength').addEventListener('input', writeURL);
     document.getElementById('seed').addEventListener('input', writeURL);
+    document.getElementById('opt-tail').addEventListener('change', ()=>{writeURL(); run();});
+    document.getElementById('opt-dots').addEventListener('change', ()=>{writeURL(); run();});
+    document.getElementById('opt-polite').addEventListener('change', ()=>{writeURL(); run();});
     applyFromURL();
-    run();
+    loadData().finally(run);
   </script>
 </body>
 </html>

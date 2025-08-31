@@ -11,29 +11,32 @@ from . import data as D
 class Config:
     seed: int | None = None
     strength: float = 0.6  # how aggressively to add quirks [0..1]
+    tail: bool = True
+    dots: bool = True
+    polite: bool = True
 
 
 class Generator:
     def __init__(self, config: Config | None = None):
         self.config = config or Config()
-        if self.config.seed is not None:
-            random.seed(self.config.seed)
+        # Use an instance RNG for determinism without touching global state
+        self.rng = random.Random(self.config.seed)
 
     def choice(self, xs: List[str]) -> str:
-        return random.choice(xs)
+        return self.rng.choice(xs)
 
     def maybe(self, p: float) -> bool:
-        return random.random() < p
+        return self.rng.random() < p
 
     def add_tail(self, s: str) -> str:
         # 文末に口調の「だよ？」等を付ける
-        if self.maybe(0.5 * self.config.strength):
+        if self.config.tail and self.maybe(0.5 * self.config.strength):
             s = s.rstrip("。.") + (" " if self.maybe(0.4) else "") + self.choice(D.TAILS)
         return s
 
     def dotdot(self, s: str) -> str:
         # 省略三点を付ける
-        if self.maybe(0.5 * self.config.strength):
+        if self.config.dots and self.maybe(0.5 * self.config.strength):
             s = s + self.choice(D.ELLIPSIS)
         return s
 
@@ -48,10 +51,11 @@ class Generator:
 
     def post_process(self, s: str) -> str:
         # です/ますを疑問調にする等の微調整
-        if self.maybe(0.35 * self.config.strength):
-            s = s.replace("です。", "ですか？").replace("です", "ですか？")
-        if self.maybe(0.25 * self.config.strength):
-            s = s.replace("ます。", "ますか？").replace("ます", "ますか？")
+        if self.config.polite:
+            if self.maybe(0.35 * self.config.strength):
+                s = s.replace("です。", "ですか？").replace("です", "ですか？")
+            if self.maybe(0.25 * self.config.strength):
+                s = s.replace("ます。", "ますか？").replace("ます", "ますか？")
         return s
 
     def pattern1(self) -> str:
@@ -109,11 +113,18 @@ class Generator:
             self.pattern1, self.pattern2, self.pattern3, self.pattern4, self.pattern5,
             self.pattern6, self.pattern7, self.pattern8, self.pattern9, self.pattern10,
         ]
-        s = random.choice(patterns)()
+        s = self.rng.choice(patterns)()
         return self.post_process(s)
 
 
-def generate(n: int = 5, seed: int | None = None, strength: float = 0.6) -> List[str]:
-    gen = Generator(Config(seed=seed, strength=strength))
+def generate(
+    n: int = 5,
+    seed: int | None = None,
+    strength: float = 0.6,
+    *,
+    tail: bool = True,
+    dots: bool = True,
+    polite: bool = True,
+) -> List[str]:
+    gen = Generator(Config(seed=seed, strength=strength, tail=tail, dots=dots, polite=polite))
     return [gen.generate_one() for _ in range(n)]
-
