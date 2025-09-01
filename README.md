@@ -1,19 +1,14 @@
-Monorepo Overview
+Project Portal
 
-このリポジトリは複数の小プロジェクトをひとつにまとめたモノレポ構成です。用途ごとに `apps/` と `tools/` に再配置しました。
+このリポジトリは、下記3つのリポジトリへ分割移行しました。各プロジェクトは以下をご参照ください。
 
-構成
-- apps/ff14-submarines: FF14 潜水艦の帰還時間キャプチャ & Googleカレンダー登録ツール（Python）。従来のルートREADMEと `requirements.txt` はここへ移動しました。
-- apps/todo-app: シンプルなToDoアプリ（HTML/JS/CSS）。
-- tools/bronto-generator: 文体（句読点や表記ゆれ）の整形・生成ツール（Python + Web UI）。テストは `tests/` にあります。
-- docs: 共有ドキュメント・サイト用ファイル。
+リンク
+- FF14 潜水艦 OCR + カレンダー: https://github.com/mona-ty/ff14-submarines
+- ToDo アプリ（Web）: https://github.com/mona-ty/todo-app
+- 文章ジェネレーター（buronto-generator）: https://github.com/mona-ty/buronto-generator
 
-クイックスタート
-- FF14 ツール: `apps/ff14-submarines/README.md` を参照。セットアップと実行方法を記載しています。
-- ToDo アプリ: `apps/todo-app/index.html` をブラウザで開くと動作します。
-- bronto-generator: `pytest` でテスト実行。CLI や Web の使い方は `tools/bronto-generator/README.md` を参照。
+このポータルには、共通の `docs/` やユーティリティスクリプトのみを残しています。
 
-開発のヒント
-- Python 依存は各アプリ配下に分離しています。仮想環境はアプリごとに作成してください。
-- CI はリポジトリ直下から `pytest` を実行しても `tools/bronto-generator/tests` を検出します。
-
+補足
+- 初期の分割に利用したスクリプト: `scripts/split_repos.ps1`
+- もう一度分割する必要はありません（既に移行済み）。
