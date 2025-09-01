@@ -1,3 +1,4 @@
 {
-  "codex.approvalPolicy": "never"
+  "codex.approvalPolicy": "never",
+  "codex.networkAccess": "enabled"
 }
