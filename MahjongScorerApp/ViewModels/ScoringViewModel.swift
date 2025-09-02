@@ -110,7 +110,6 @@ final class ScoringViewModel: ObservableObject {
         if hit(["十三不塔"]) { hand.selectedYaku.insert(.jusanFuta) }
 
         // Dora counts like "ドラ3", "赤ドラ2", "裏ドラ1"
-        // Simple regex-ish scan for patterns
         let patterns: [(label: String, setter: (Int) -> Void)] = [
             ("ドラ", { self.hand.dora = $0 }),
             ("赤ドラ", { self.hand.akaDora = $0 }),
@@ -125,11 +124,8 @@ final class ScoringViewModel: ObservableObject {
     }
 
     private func extractLeadingNumber(from text: String) -> Int? {
-        // Extract first 1-2 chars and parse
         let prefix = String(text.prefix(3))
-        // digits first
         if let d = prefix.first, d.isNumber, let n = Int(String(d)) { return n }
-        // Japanese small numbers
         for k in [2,3,1] {
             let p = String(prefix.prefix(k))
             if let n = JapaneseNumberParser.parse(p) { return n }
@@ -137,3 +133,4 @@ final class ScoringViewModel: ObservableObject {
         return nil
     }
 }
+

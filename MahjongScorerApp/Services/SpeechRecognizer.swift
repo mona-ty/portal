@@ -36,7 +36,7 @@ final class SpeechRecognizer: NSObject, ObservableObject {
         request = SFSpeechAudioBufferRecognitionRequest()
         request?.shouldReportPartialResults = true
 
-        guard let inputNode = audioEngine.inputNode as AVAudioInputNode? else { return }
+        let inputNode = audioEngine.inputNode
         let recordingFormat = inputNode.outputFormat(forBus: 0)
         inputNode.removeTap(onBus: 0)
         inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { [weak self] buffer, _ in
@@ -68,3 +68,4 @@ final class SpeechRecognizer: NSObject, ObservableObject {
         isListening = false
     }
 }
+

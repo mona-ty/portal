@@ -1,7 +1,7 @@
 import Foundation
 
 enum JapaneseNumberParser {
-    // Very simple parser for small integers found in speech (0-20)
+    // Simple parser for small integers (0-20) commonly spoken
     static func parse(_ text: String) -> Int? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         if let n = Int(trimmed) { return n }
@@ -31,3 +31,4 @@ enum JapaneseNumberParser {
         return map[trimmed]
     }
 }
+

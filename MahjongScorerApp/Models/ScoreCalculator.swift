@@ -50,7 +50,7 @@ struct ScoreCalculator {
     }
 
     static func limitTier(han: Int, fu: Int, yakumanMul: Int, rules: Rules) -> LimitTier {
-        // Special-case limit yaku like 流し満貫
+        // Special-case limit yaku like ��������
         // Note: callers ensure hand context is available
         if yakumanMul > 0 { return .yakuman(multiplier: yakumanMul) }
         if rules.allowKazoeYakuman && han >= 13 { return .yakuman(multiplier: 1) }
@@ -67,7 +67,7 @@ struct ScoreCalculator {
     static func calculate(hand: HandState, rules: Rules) -> ScoreResult {
         let (totalHan, yakumanMul) = totalHan(for: hand, rules: rules)
         let fu = hand.manualFu ?? autoFu(for: hand)
-        // Special: 流し満貫
+        // Special: ��������
         let hasNagashi = hand.selectedYaku.contains { y in if case .nagashiMangan = y { return true } else { return false } }
         let tier: LimitTier = hasNagashi ? .mangan : limitTier(han: totalHan, fu: fu, yakumanMul: yakumanMul, rules: rules)
 
@@ -115,7 +115,7 @@ struct ScoreCalculator {
                 payments = .init(ronPoints: ron, tsumoNonDealerFromDealer: nil, tsumoNonDealerFromNonDealer: nil, tsumoDealerEach: nil)
             case .tsumo:
                 if hand.isDealer {
-                    // dealer tsumo each pays: mangan 4000, haneman 6000, baiman 8000, sanbaiman 12000, yakuman 16000×m
+                    // dealer tsumo each pays: mangan 4000, haneman 6000, baiman 8000, sanbaiman 12000, yakuman 16000�~m
                     let each: Int
                     switch tier {
                     case .mangan: each = 4000

@@ -16,29 +16,29 @@ struct ContentView: View {
                 }
                 .padding()
             }
-            .navigationTitle("�����_���v�Z")
+            .navigationTitle("麻雀点数計算")
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("�N���A", action: viewModel.clearAll)
+                    Button("クリア", action: viewModel.clearAll)
                 }
             }
         }
     }
 
     private var contextSection: some View {
-        GroupBox(label: Text("��{���")) {
+        GroupBox(label: Text("基本情報")) {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
-                    Picker("�a��", selection: $viewModel.hand.winType) {
-                        Text("����").tag(WinType.ron)
-                        Text("�c��").tag(WinType.tsumo)
+                    Picker("和了", selection: $viewModel.hand.winType) {
+                        Text("ロン").tag(WinType.ron)
+                        Text("ツモ").tag(WinType.tsumo)
                     }.pickerStyle(.segmented)
                 }
-                Toggle("�e�i�e�Ȃ�ON�j", isOn: $viewModel.hand.isDealer)
-                Toggle("��O�i���I�������OFF�j", isOn: $viewModel.hand.menzen)
+                Toggle("親（親ならON）", isOn: $viewModel.hand.isDealer)
+                Toggle("門前（副露があればOFF）", isOn: $viewModel.hand.menzen)
                 HStack {
-                    Stepper("�{��: \(viewModel.hand.honba)", value: $viewModel.hand.honba, in: 0...20)
-                    Stepper("����: \(viewModel.hand.riichiSticks)", value: $viewModel.hand.riichiSticks, in: 0...10)
+                    Stepper("本場: \(viewModel.hand.honba)", value: $viewModel.hand.honba, in: 0...20)
+                    Stepper("供託: \(viewModel.hand.riichiSticks)", value: $viewModel.hand.riichiSticks, in: 0...10)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -46,21 +46,21 @@ struct ContentView: View {
     }
 
     private var doraSection: some View {
-        GroupBox(label: Text("�h��")) {
+        GroupBox(label: Text("ドラ")) {
             HStack {
-                Stepper("�h��: \(viewModel.hand.dora)", value: $viewModel.hand.dora, in: 0...20)
-                Stepper("��: \(viewModel.hand.akaDora)", value: $viewModel.hand.akaDora, in: 0...10)
-                Stepper("��: \(viewModel.hand.uraDora)", value: $viewModel.hand.uraDora, in: 0...20)
+                Stepper("ドラ: \(viewModel.hand.dora)", value: $viewModel.hand.dora, in: 0...20)
+                Stepper("赤: \(viewModel.hand.akaDora)", value: $viewModel.hand.akaDora, in: 0...10)
+                Stepper("裏: \(viewModel.hand.uraDora)", value: $viewModel.hand.uraDora, in: 0...20)
             }
         }
     }
 
     private var fuSection: some View {
-        GroupBox(label: Text("��")) {
+        GroupBox(label: Text("符")) {
             HStack {
-                Stepper("��: \(viewModel.hand.manualFu ?? ScoreCalculator.autoFu(for: viewModel.hand))", onIncrement: {
+                Stepper("符: \(viewModel.hand.manualFu ?? ScoreCalculator.autoFu(for: viewModel.hand))", onIncrement: {
                     var fu = viewModel.hand.manualFu ?? ScoreCalculator.autoFu(for: viewModel.hand)
-                    fu = fu == 25 ? 30 : fu // 25��30 �ȍ~10����
+                    fu = fu == 25 ? 30 : fu // 25→30 以降10刻み
                     fu += 10
                     viewModel.hand.manualFu = fu
                 }, onDecrement: {
@@ -68,37 +68,37 @@ struct ContentView: View {
                     fu = max(20, fu == 30 ? 25 : fu - 10)
                     viewModel.hand.manualFu = fu
                 })
-                Button("����") { viewModel.autoSetFu() }
-                Button("�蓮����") { viewModel.hand.manualFu = nil }
+                Button("自動") { viewModel.autoSetFu() }
+                Button("手動解除") { viewModel.hand.manualFu = nil }
             }
         }
     }
 
     private var yakuSection: some View {
-        GroupBox(label: Text("����I���i�����ł��j")) {
+        GroupBox(label: Text("役を選択（音声でも可）")) {
             VStack(alignment: .leading, spacing: 8) {
                 yakuGrid(
                     [
-                        (.riichi, "���[�`"), (.doubleRiichi, "�_�u�����[�`"), (.ippatsu, "�ꔭ"), (.menzenTsumo, "��O�c��"), (.pinfu, "���a"), (.tanyao, "�^�����I"), (.iipeikou, "��u��")
+                        (.riichi, "リーチ"), (.doubleRiichi, "ダブルリーチ"), (.ippatsu, "一発"), (.menzenTsumo, "門前ツモ"), (.pinfu, "平和"), (.tanyao, "タンヤオ"), (.iipeikou, "一盃口")
                     ]
                 )
                 Divider()
                 yakuGrid(
                     [
-                        (.haku, "��"), (.hatsu, "�"), (.chun, "��"), (.seatWind, "����"), (.roundWind, "�ꕗ"), (.haitei, "�C��"), (.houtei, "�͒�"), (.rinshan, "���"), (.chankan, "����"), (.nagashiMangan, "��������")
+                        (.haku, "白"), (.hatsu, "發"), (.chun, "中"), (.seatWind, "自風"), (.roundWind, "場風"), (.haitei, "海底"), (.houtei, "河底"), (.rinshan, "嶺上"), (.chankan, "槍槓"), (.nagashiMangan, "流し満貫")
                     ]
                 )
                 Divider()
                 yakuGrid(
                     [
-                        (.sanshokuDojun, "�O�F����"), (.ittsu, "��C�ʊ�"), (.toitoi, "�΁X�a"), (.sanankou, "�O�Í�"), (.sanshokuDokou, "�O�F����"), (.sankantsu, "�O�Ȏq"), (.chanta, "���S��?��"), (.chiitoitsu, "���Ύq"), (.shousangen, "���O��"), (.honroutou, "���V��"), (.junchan, "���S��?��"), (.honitsu, "����F"), (.chinitsu, "����F")
+                        (.sanshokuDojun, "三色同順"), (.ittsu, "一気通貫"), (.toitoi, "対々和"), (.sanankou, "三暗刻"), (.sanshokuDokou, "三色同刻"), (.sankantsu, "三槓子"), (.chanta, "混全帯么九"), (.chiitoitsu, "七対子"), (.shousangen, "小三元"), (.honroutou, "混老頭"), (.junchan, "純全帯么九"), (.honitsu, "混一色"), (.chinitsu, "清一色")
                     ]
                 )
                 Divider()
-                Text("��")
+                Text("役満")
                 yakuGrid(
                     [
-                        (.renhou, "�l�a"), (.kokushi, "���m���o"), (.daisangen, "��O��"), (.suuAnkou, "�l�Í�"), (.suuAnkouTanki, "�l�Í��P�R"), (.tsuuiisou, "����F"), (.ryuuiisou, "�Έ�F"), (.chinroutou, "���V��"), (.shousuushi, "���l��"), (.daisushi, "��l��"), (.suuKantsu, "�l�Ȏq"), (.chuuren, "��@��"), (.junseiChuuren, "������@"), (.tenhou, "�V�a"), (.chihou, "�n�a"), (.jusanFuta, "�\�O�s��")
+                        (.renhou, "人和"), (.kokushi, "国士無双"), (.daisangen, "大三元"), (.suuAnkou, "四暗刻"), (.suuAnkouTanki, "四暗刻単騎"), (.tsuuiisou, "字一色"), (.ryuuiisou, "緑一色"), (.chinroutou, "清老頭"), (.shousuushi, "小四喜"), (.daisushi, "大四喜"), (.suuKantsu, "四槓子"), (.chuuren, "九蓮宝燈"), (.junseiChuuren, "純正九蓮"), (.tenhou, "天和"), (.chihou, "地和"), (.jusanFuta, "十三不塔")
                     ]
                 )
             }
@@ -122,46 +122,46 @@ struct ContentView: View {
     }
 
     private var voiceSection: some View {
-        GroupBox(label: Text("��������")) {
+        GroupBox(label: Text("音声入力")) {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
                     Button(action: viewModel.toggleListening) {
-                        Label(viewModel.speech.isListening ? "��~" : "�J�n", systemImage: viewModel.speech.isListening ? "stop.circle" : "mic.circle")
+                        Label(viewModel.speech.isListening ? "停止" : "開始", systemImage: viewModel.speech.isListening ? "stop.circle" : "mic.circle")
                     }
                     .buttonStyle(.borderedProminent)
                     if !viewModel.speech.isAuthorized {
-                        Text("�ݒ�ŉ����F���̋����K�v�ł�").foregroundColor(.orange)
+                        Text("設定で音声認識の許可が必要です").foregroundColor(.orange)
                     }
                 }
-                Text("�F����: \(viewModel.lastVoiceText)").font(.footnote).foregroundColor(.secondary)
+                Text("認識中: \(viewModel.lastVoiceText)").font(.footnote).foregroundColor(.secondary)
             }
         }
     }
 
     private var resultSection: some View {
-        GroupBox(label: Text("����")) {
+        GroupBox(label: Text("結果")) {
             let r = viewModel.result
             let adj = ScoreCalculator.applyHonbaAndRiichi(to: r, hand: viewModel.hand)
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
-                    Text("�|: \(r.han)")
-                    Text("��: \(r.fu)")
+                    Text("翻: \(r.han)")
+                    Text("符: \(r.fu)")
                     if let l = r.limitLabel { Text(l).bold() }
                 }
                 switch viewModel.hand.winType {
                 case .ron:
-                    if let ron = adj.ron { Text("����: \(ron) �_�i�����܂ށj") }
+                    if let ron = adj.ron { Text("ロン: \(ron) 点（供託含む）") }
                 case .tsumo:
                     if viewModel.hand.isDealer, let each = adj.tsumo.dealerEach {
                         let total = each * 3 + viewModel.hand.riichiSticks * 1000
-                        Text("�c��: \(each) �I�[���i���v \(total)�j")
+                        Text("ツモ: \(each) オール（合計 \(total)）")
                     } else if let fd = adj.tsumo.fromDealer, let fo = adj.tsumo.fromOthers {
                         let total = fd + fo * 2 + viewModel.hand.riichiSticks * 1000
-                        Text("�c��: �e \(fd) / �q \(fo)�i���v \(total)�j")
+                        Text("ツモ: 親 \(fd) / 子 \(fo)（合計 \(total)）")
                     }
                 }
                 if r.basePoints > 0 {
-                    Text("��{�_: \(r.basePoints)").font(.footnote).foregroundColor(.secondary)
+                    Text("基本点: \(r.basePoints)").font(.footnote).foregroundColor(.secondary)
                 }
             }
         }
