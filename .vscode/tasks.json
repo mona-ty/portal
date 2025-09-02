@@ -1,10 +1,8 @@
 {
-  "codex.approvalPolicy": "never",
-  "codex.networkAccess": "enabled",
-  "codex.customCommands": [
+  "version": "2.0.0",
+  "tasks": [
     {
-      "name": "Git Commit (all)",
-      "slash": "/commit",
+      "label": "Git: Commit (all)",
       "type": "shell",
       "command": "pwsh",
       "args": [
@@ -16,12 +14,10 @@
         "-Message",
         "${input:commitMessage}"
       ],
-      "cwd": "${workspaceFolder}",
-      "timeoutMs": 120000
+      "problemMatcher": []
     },
     {
-      "name": "Git Push",
-      "slash": "/push",
+      "label": "Git: Push",
       "type": "shell",
       "command": "pwsh",
       "args": [
@@ -30,12 +26,10 @@
         "-File",
         "scripts/git-push.ps1"
       ],
-      "cwd": "${workspaceFolder}",
-      "timeoutMs": 120000
+      "problemMatcher": []
     },
     {
-      "name": "Commit + Push",
-      "slash": "/cpush",
+      "label": "Git: Commit + Push",
       "type": "shell",
       "command": "pwsh",
       "args": [
@@ -47,15 +41,15 @@
         "-Message",
         "${input:commitMessage}"
       ],
-      "cwd": "${workspaceFolder}",
-      "timeoutMs": 180000
+      "problemMatcher": []
     }
   ],
-  "codex.inputs": [
+  "inputs": [
     {
       "id": "commitMessage",
+      "type": "promptString",
       "description": "Commit message",
-      "placeholder": "feat: ... / fix: ..."
+      "default": "chore: update"
     }
   ]
 }
