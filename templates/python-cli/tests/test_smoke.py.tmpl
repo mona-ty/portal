@@ -1,0 +1,9 @@
+import subprocess
+import sys
+
+
+def test_cli_runs():
+    proc = subprocess.run([sys.executable, "-m", "__PKG_NAME__", "--name", "tester"], capture_output=True, text=True)
+    assert proc.returncode == 0
+    assert "Hello, tester!" in proc.stdout
+

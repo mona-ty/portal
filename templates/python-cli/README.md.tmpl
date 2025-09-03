@@ -1,0 +1,22 @@
+# __APP_NAME__（Python CLI）
+
+__DESCRIPTION__
+
+## 要件
+- Python 3.10+
+
+## 使い方
+```powershell
+# 仮想環境（任意）
+python -m venv .venv
+.venv\Scripts\activate
+
+# 実行（モジュールとして）
+python -m __PKG_NAME__ --help
+```
+
+## 開発
+- エントリ: `__PKG_NAME__/__main__.py`
+- CLI: `__PKG_NAME__/cli.py`
+- テスト: `apps/__APP_SLUG__/tests/`（`-WithTests` 指定時）
+

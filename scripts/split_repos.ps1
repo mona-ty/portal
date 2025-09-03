@@ -25,9 +25,10 @@ if (-not $Owner) {
 Write-Host "Using owner: $Owner" -ForegroundColor Cyan
 
 $repos = @(
-  @{ name = 'ff14-submarines'; desc = 'FF14 submarine OCR + Calendar tool'; path = 'apps/ff14-submarines' },
-  @{ name = 'todo-app'; desc = 'Simple ToDo web app'; path = 'apps/todo-app' },
-  @{ name = 'buronto-generator'; desc = 'Japanese style-aware text generator + web'; path = 'tools/bronto-generator' }
+  @{ name = 'ff14-submarines'; desc = 'FF14 submarine OCR + Google Calendar tool'; path = 'apps/ff14-submarines' },
+  @{ name = 'pomodoro-cli'; desc = 'Simple Pomodoro timer CLI in Python'; path = 'apps/pomodoro-cli' },
+  @{ name = 'liftlog-ios'; desc = 'iOS SwiftUI strength training log (scaffold)'; path = 'apps/liftlog-ios' },
+  @{ name = 'mahjong-scorer-ios'; desc = 'iOS SwiftUI Mahjong scoring app (scaffold)'; path = 'apps/mahjong-scorer-ios' }
 )
 
  # Remember starting ref to restore after temporary checkouts
