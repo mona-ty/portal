@@ -12,6 +12,8 @@ def load_ocr_module():
     spec = importlib.util.spec_from_file_location("ff14_submarines.ocr", ocr_path)
     mod = importlib.util.module_from_spec(spec)
     assert spec and spec.loader
+    # Ensure dataclasses/typing resolution can find the module by name
+    sys.modules[spec.name] = mod  # type: ignore[index]
     spec.loader.exec_module(mod)  # type: ignore
     return mod
 
