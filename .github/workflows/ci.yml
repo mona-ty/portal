@@ -6,7 +6,7 @@ jobs:
   verify-docs:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Verify docs assets (optional)
         run: |
           test -f docs/index.html || echo 'docs/index.html missing'
