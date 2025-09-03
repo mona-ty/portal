@@ -8,7 +8,7 @@ from datetime import datetime, timezone, timedelta
 def load_ocr_module():
     here = os.path.dirname(os.path.abspath(__file__))
     repo_root = os.path.abspath(os.path.join(here, os.pardir))
-    ocr_path = os.path.join(repo_root, "ff14-submarines", "ocr.py")
+    ocr_path = os.path.join(repo_root, "apps", "ff14-submarines", "ocr.py")
     spec = importlib.util.spec_from_file_location("ff14_submarines.ocr", ocr_path)
     mod = importlib.util.module_from_spec(spec)
     assert spec and spec.loader
@@ -69,4 +69,3 @@ class TestOCRExtraction(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-
