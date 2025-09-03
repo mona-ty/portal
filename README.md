@@ -1,21 +1,24 @@
 # Apps Lab Monorepo
 
-このリポジトリは、個人開発向けの小規模アプリをまとめたモノレポ（実験場）です。各アプリは `apps/` 配下に配置し、必要に応じて独立リポに昇格できる構成にしています。
+個人開発向けの小規模アプリをまとめたモノレポ（実験場）です。各アプリは `apps/` 配下に配置し、必要に応じて独立リポへ昇格できる構成にしています。
 
 ## 構成
 - `apps/ff14-submarines/`: FF14 サブマリンの帰還時刻を OCR し Google カレンダーに登録するツール（Python）
 - `apps/pomodoro-cli/`: シンプルなポモドーロタイマー CLI（Python）
 - `apps/liftlog-ios/`: 筋トレ記録アプリの iOS スケルトン（SwiftUI）
 - `apps/mahjong-scorer-ios/`: 麻雀点数計算アプリの iOS スケルトン（SwiftUI）
-- `docs/`: リポ全体のドキュメント
-- `scripts/`: 共通スクリプト（リポ分割など）
+- `docs/`: ドキュメント（ハンドブック/新規アプリ作成手順）
+- `scripts/`: 共通スクリプト（新規アプリ生成・リポ分割）
+- `templates/`: 生成テンプレート
 - `tests/`: 共有テスト（将来は各アプリ配下へ移行）
-- `tools/`: 共通ユーティリティ
+- `archived/`: 退避用
 
-## 運用方針（サマリ）
-- 日々の試行錯誤やノートはリポ外のワークスペースへ（例: `C:\codex-work\<repo>`）
-- 価値が固まったアプリは `scripts/split_repos.ps1` で独立リポへ昇格
-- README/最低限のテスト/起動手順が整ったら昇格の目安
+## ドキュメント
+- 開発ハンドブック: `docs/handbook.md`
+- 新規アプリ作成ワークフロー: `docs/new_app.md`
 
-## 既知のメモ
-- 一部の日本語 README は文字化け（エンコーディング）修正予定です（UTF-8 化）。
+## 運用の要点
+- 日々の試行錯誤やノートはリポ外ワークスペースへ（例: `C:\\codex-work\\<repo>`）
+- アプリが成熟したら `scripts/split_repos.ps1` で独立リポへ昇格
+- CI: `.github/workflows/python-tests.yml`（Windows/Ubuntu で unittest 実行）
+
