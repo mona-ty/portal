@@ -28,3 +28,8 @@ credentials.json
 
 # Local backups (not tracked)
 backup/
+# Ignore nested caches and project data under apps
+apps/**/__pycache__/
+apps/**/data/
+# Generic backup files
+**/*.bak
