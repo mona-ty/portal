@@ -33,6 +33,51 @@ namespace XIVSubmarinesReturn
             TryWriteLegacy(LegacyFile2, json);
         }
 
+        public static bool WriteIfChanged(SubmarineSnapshot snapshot)
+        {
+            try
+            {
+                EnsureMigrated();
+                var newNorm = NormalizeSnapshotJson(snapshot);
+                string? oldNorm = null;
+                if (File.Exists(FilePath))
+                {
+                    try
+                    {
+                        var prev = File.ReadAllText(FilePath);
+                        var prevSnap = System.Text.Json.JsonSerializer.Deserialize<SubmarineSnapshot>(prev) ?? new SubmarineSnapshot();
+                        oldNorm = NormalizeSnapshotJson(prevSnap);
+                    }
+                    catch { }
+                }
+                if (!string.Equals(newNorm, oldNorm, StringComparison.Ordinal))
+                {
+                    Write(snapshot);
+                    return true;
+                }
+                return false;
+            }
+            catch { try { Write(snapshot); } catch { } return true; }
+        }
+
+        private static string NormalizeSnapshotJson(SubmarineSnapshot s)
+        {
+            try
+            {
+                var lite = new
+                {
+                    s.SchemaVersion,
+                    s.Source,
+                    Items = (s.Items ?? new System.Collections.Generic.List<SubmarineRecord>())
+                        .Select(x => new { x.Name, x.Rank, x.DurationMinutes, x.RouteKey, x.EtaUnix })
+                        .OrderBy(x => x.Name, StringComparer.Ordinal)
+                        .ToArray()
+                };
+                return System.Text.Json.JsonSerializer.Serialize(lite);
+            }
+            catch { return string.Empty; }
+        }
+
         public static string CurrentFilePath() => FilePath;
 
         private static void EnsureMigrated()

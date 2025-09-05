@@ -19,6 +19,7 @@ public sealed partial class Plugin
     private string _probeText = string.Empty;
     private int _routeEditId;
     private string _routeEditName = string.Empty;
+    private string _alarmLeadText = string.Empty;
 
     private void InitUI()
     {
@@ -110,6 +111,178 @@ public sealed partial class Plugin
             }
 
             ImGui.Separator();
+            // Google Calendar
+            if (ImGui.CollapsingHeader("Google Calendar"))
+            {
+                bool gEnable = Config.GoogleEnabled;
+                if (ImGui.Checkbox("Enable", ref gEnable)) { Config.GoogleEnabled = gEnable; SaveConfig(); }
+                int modeVal = Config.GoogleEventMode == CalendarMode.Latest ? 1 : 0;
+                if (ImGui.RadioButton("All", modeVal == 0)) { Config.GoogleEventMode = CalendarMode.All; SaveConfig(); }
+                ImGui.SameLine();
+                if (ImGui.RadioButton("Latest only", modeVal == 1)) { Config.GoogleEventMode = CalendarMode.Latest; SaveConfig(); }
+                var calId = Config.GoogleCalendarId ?? string.Empty;
+                if (ImGui.InputText("CalendarId", ref calId, 128)) { Config.GoogleCalendarId = calId; SaveConfig(); }
+                var rt = Config.GoogleRefreshToken ?? string.Empty;
+                if (ImGui.InputText("RefreshToken", ref rt, 256)) { Config.GoogleRefreshToken = rt; SaveConfig(); }
+                var cid = Config.GoogleClientId ?? string.Empty;
+                if (ImGui.InputText("ClientId", ref cid, 256)) { Config.GoogleClientId = cid; SaveConfig(); }
+                var cs = Config.GoogleClientSecret ?? string.Empty;
+                if (ImGui.InputText("ClientSecret", ref cs, 256)) { Config.GoogleClientSecret = cs; SaveConfig(); }
+                if (ImGui.Button("Test Google"))
+                {
+                    try
+                    {
+                        bool ok = _gcal != null && _gcal.EnsureAuthorizedAsync().GetAwaiter().GetResult();
+                        _uiStatus = ok ? "GCal auth OK" : "GCal not ready";
+                    }
+                    catch (System.Exception ex) { _uiStatus = $"GCal test failed: {ex.Message}"; }
+                }
+            }
+
+            // Discord
+            if (ImGui.CollapsingHeader("Discord"))
+            {
+                bool dEnable = Config.DiscordEnabled;
+                if (ImGui.Checkbox("Enable", ref dEnable)) { Config.DiscordEnabled = dEnable; SaveConfig(); }
+                var wh = Config.DiscordWebhookUrl ?? string.Empty;
+                if (ImGui.InputText("Webhook URL", ref wh, 512)) { Config.DiscordWebhookUrl = wh; SaveConfig(); }
+                bool latestOnly = Config.DiscordLatestOnly;
+                if (ImGui.Checkbox("Earliest only (ETA min) / \u6700\u65e9(ETA\u6700\u5c0f)", ref latestOnly)) { Config.DiscordLatestOnly = latestOnly; SaveConfig(); }
+                bool useEmbeds = Config.DiscordUseEmbeds;
+                if (ImGui.Checkbox("Use embeds", ref useEmbeds)) { Config.DiscordUseEmbeds = useEmbeds; SaveConfig(); }
+                if (ImGui.Button("Test Discord"))
+                {
+                    try
+                    {
+                        var snap = _uiSnapshot ?? new SubmarineSnapshot
+                        {
+                            PluginVersion = typeof(Plugin).Assembly.GetName().Version?.ToString(3) ?? "0.0.0",
+                            Items = new System.Collections.Generic.List<SubmarineRecord>
+                            {
+                                new() { Name = "Submarine-1", Slot = 1, DurationMinutes = 10, RouteKey = "Point-1 - Point-2" }
+                            }
+                        };
+                        try { Services.EtaFormatter.Enrich(snap); } catch { }
+                        if (_discord != null)
+                        {
+                            _discord.NotifySnapshotAsync(snap, Config.DiscordLatestOnly).GetAwaiter().GetResult();
+                            _uiStatus = "Discord sent";
+                        }
+                        else _uiStatus = "Discord not init";
+                    }
+                    catch (System.Exception ex) { _uiStatus = $"Discord test failed: {ex.Message}"; }
+                }
+            }
+
+            // Debug
+            if (ImGui.CollapsingHeader("Debug"))
+            {
+                bool dbg = Config.DebugLogging;
+                if (ImGui.Checkbox("Enable debug logging", ref dbg)) { Config.DebugLogging = dbg; SaveConfig(); }
+                if (ImGui.Button("Open trace"))
+                {
+                    try
+                    {
+                        var path = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(BridgeWriter.CurrentFilePath()) ?? string.Empty, "xsr_debug.log");
+                        if (!string.IsNullOrWhiteSpace(path))
+                            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = path, UseShellExecute = true });
+                    }
+                    catch (System.Exception ex) { _uiStatus = $"Open trace failed: {ex.Message}"; }
+                }
+                ImGui.SameLine();
+                if (ImGui.Button("Run self-test"))
+                {
+                    try { CmdSelfTest(); _uiStatus = "Self-test executed"; }
+                    catch (System.Exception ex) { _uiStatus = $"Self-test failed: {ex.Message}"; }
+                }
+            }
+
+            // Alarm
+            if (ImGui.CollapsingHeader("Alarm"))
+            {
+                if (string.IsNullOrEmpty(_alarmLeadText))
+                {
+                    try
+                    {
+                        var ls = (Config.AlarmLeadMinutes ?? new System.Collections.Generic.List<int>()).ToArray();
+                        _alarmLeadText = string.Join(",", ls);
+                    }
+                    catch { _alarmLeadText = "5,0"; }
+                }
+                var tmp = _alarmLeadText;
+                if (ImGui.InputText("Lead minutes (comma)", ref tmp, 64))
+                {
+                    _alarmLeadText = tmp;
+                }
+                ImGui.SameLine();
+                if (ImGui.Button("Save Alarm"))
+                {
+                    try
+                    {
+                        var parts = (tmp ?? string.Empty).Split(new[] { ',', ' ', ';' }, System.StringSplitOptions.RemoveEmptyEntries);
+                        var list = new System.Collections.Generic.List<int>(parts.Length);
+                        foreach (var p in parts)
+                        {
+                            if (int.TryParse(p.Trim(), out var v)) list.Add(v);
+                        }
+                        Config.AlarmLeadMinutes = list;
+                        SaveConfig();
+                        _uiStatus = "Alarm leads saved";
+                    }
+                    catch (System.Exception ex) { _uiStatus = $"Alarm save failed: {ex.Message}"; }
+                }
+            }
+
+            // Notion
+            if (ImGui.CollapsingHeader("Notion"))
+            {
+                bool nEnable = Config.NotionEnabled;
+                if (ImGui.Checkbox("Enable", ref nEnable)) { Config.NotionEnabled = nEnable; SaveConfig(); }
+                var tok = Config.NotionToken ?? string.Empty;
+                if (ImGui.InputText("Integration Token", ref tok, 256)) { Config.NotionToken = tok; SaveConfig(); }
+                var db = Config.NotionDatabaseId ?? string.Empty;
+                if (ImGui.InputText("Database ID", ref db, 256)) { Config.NotionDatabaseId = db; SaveConfig(); }
+                bool nLatest = Config.NotionLatestOnly;
+                if (ImGui.Checkbox("Earliest only (ETA min)", ref nLatest)) { Config.NotionLatestOnly = nLatest; SaveConfig(); }
+
+                // Property names
+                var pn = Config.NotionPropName ?? "Name";
+                if (ImGui.InputText("Prop: Name (title)", ref pn, 64)) { Config.NotionPropName = pn; SaveConfig(); }
+                var ps = Config.NotionPropSlot ?? "Slot";
+                if (ImGui.InputText("Prop: Slot (number)", ref ps, 64)) { Config.NotionPropSlot = ps; SaveConfig(); }
+                var pe = Config.NotionPropEta ?? "ETA";
+                if (ImGui.InputText("Prop: ETA (date)", ref pe, 64)) { Config.NotionPropEta = pe; SaveConfig(); }
+                var pr = Config.NotionPropRoute ?? "Route";
+                if (ImGui.InputText("Prop: Route (rich_text)", ref pr, 64)) { Config.NotionPropRoute = pr; SaveConfig(); }
+                var prk = Config.NotionPropRank ?? "Rank";
+                if (ImGui.InputText("Prop: Rank (number)", ref prk, 64)) { Config.NotionPropRank = prk; SaveConfig(); }
+                var px = Config.NotionPropExtId ?? "ExtId";
+                if (ImGui.InputText("Prop: ExtId (rich_text)", ref px, 64)) { Config.NotionPropExtId = px; SaveConfig(); }
+
+                if (ImGui.Button("Test Notion"))
+                {
+                    try
+                    {
+                        var snap = _uiSnapshot ?? new SubmarineSnapshot
+                        {
+                            PluginVersion = typeof(Plugin).Assembly.GetName().Version?.ToString(3) ?? "0.0.0",
+                            Items = new System.Collections.Generic.List<SubmarineRecord>
+                            {
+                                new() { Name = "Submarine-1", Slot = 1, DurationMinutes = 10, RouteKey = "Point-1 - Point-2", Rank = 10, EtaUnix = DateTimeOffset.UtcNow.AddMinutes(10).ToUnixTimeSeconds() }
+                            }
+                        };
+                        try { Services.EtaFormatter.Enrich(snap); } catch { }
+                        if (_alarm != null)
+                        {
+                            // reuse scheduler path
+                            _alarm.UpdateSnapshot(snap);
+                            _uiStatus = "Notion test enqueued";
+                        }
+                    }
+                    catch (System.Exception ex) { _uiStatus = $"Notion test failed: {ex.Message}"; }
+                }
+            }
+
             if (ImGui.Button("Learn names from UI"))
             {
                 try { CmdLearnNames(); _uiStatus = "Learn triggered"; }
