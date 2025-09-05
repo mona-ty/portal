@@ -33,7 +33,7 @@ apps/**/__pycache__/
 apps/**/data/
 # Generic backup files
 **/*.bak
- 
+
 # Visual Studio local files
 .vs/
 
@@ -67,3 +67,4 @@ archive/*
 
 # Temporary files (local, not tracked)
 tmp/
+
