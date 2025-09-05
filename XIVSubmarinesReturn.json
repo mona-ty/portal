@@ -1,0 +1,10 @@
+{
+  "Name": "XIV Submarines Return",
+  "Author": "Apps Lab",
+  "Punchline": "Submarine list -> JSON bridge",
+  "Description": "Captures company workshop submarine list and writes JSON for external tools.",
+  "RepoUrl": "",
+  "Tags": ["submarine", "workshop", "utility"]
+}
+
+

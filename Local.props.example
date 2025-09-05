@@ -1,0 +1,8 @@
+<Project>
+  <PropertyGroup>
+    <!-- Set this to your local Dalamud dev Lib folder -->
+    <!-- Example: C:\\XIVLauncher\\dev\\Lib -->
+    <DalamudLibPath></DalamudLibPath>
+  </PropertyGroup>
+</Project>
+
