@@ -1,0 +1,12 @@
+{
+  "Name": "XIV Submarines Return",
+  "InternalName": "XIVSubmarinesReturn",
+  "Author": "Apps Lab",
+  "Punchline": "Submarine list -> JSON bridge",
+  "Description": "Captures company workshop submarine list and writes JSON for external tools.",
+  "ApplicableVersion": "any",
+  "DalamudApiLevel": 13,
+  "AssemblyName": "XIVSubmarinesReturn.dll",
+  "AssemblyVersion": "0.1.1",
+  "Tags": ["submarine", "workshop", "utilities"]
+}

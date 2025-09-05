@@ -1,0 +1,14 @@
+model_reasoning_effort = "high"
+hide_agent_reasoning = true
+network_access = true
+
+# Windows向け通知音（PowerShellでシステム音を再生）
+notify = ["powershell", "-NoProfile", "-Command", "[System.Media.SystemSounds]::Exclamation.Play()"]
+
+[tools]
+web_search = true
+
+[mcp_servers.context7]
+command = "npx"
+args = ["-y", "@upstash/context7-mcp@latest"]
+

@@ -1,0 +1,8 @@
+<Project>
+  <PropertyGroup>
+    <!-- Dalamud ローカルSDKのパス (XIVLauncher dev hooks) を設定してください -->
+    <!-- 例: C:\\Users\\<User>\\AppData\\Roaming\\XIVLauncher\\addon\\Hooks\\dev -->
+    <DalamudLibPath>C:\\Users\\<User>\\AppData\\Roaming\\XIVLauncher\\addon\\Hooks\\dev</DalamudLibPath>
+  </PropertyGroup>
+</Project>
+
