@@ -3,6 +3,8 @@ using Dalamud.Plugin;
 
 namespace XIVSubmarinesReturn;
 
+public enum CalendarMode { All, Latest }
+
 public class Configuration : IPluginConfiguration
 {
     public int Version { get; set; } = 1;
@@ -32,6 +34,43 @@ public class Configuration : IPluginConfiguration
 
     // ルート名マッピング (Point ID -> 表示名)
     public System.Collections.Generic.Dictionary<byte, string> RouteNames { get; set; } = new();
+
+    // Discord embeds (duplicated below for grouping – keep single definition)
+    // public bool DiscordUseEmbeds { get; set; } = false;
+
+    // Google Calendar settings
+    public bool GoogleEnabled { get; set; } = false;
+    public CalendarMode GoogleEventMode { get; set; } = CalendarMode.All;
+    public string GoogleRefreshToken { get; set; } = string.Empty;
+    public string GoogleClientId { get; set; } = string.Empty;
+    public string GoogleClientSecret { get; set; } = string.Empty;
+    public string GoogleCalendarId { get; set; } = "primary";
+    public System.Collections.Generic.List<int> GoogleReminderMinutes { get; set; } = new() { 0 };
+
+    // Discord settings
+    public bool DiscordEnabled { get; set; } = false;
+    public string DiscordWebhookUrl { get; set; } = string.Empty;
+    public bool DiscordLatestOnly { get; set; } = false;
+    public bool DiscordUseEmbeds { get; set; } = true;
+
+    // In-game alarm lead minutes
+    public System.Collections.Generic.List<int> AlarmLeadMinutes { get; set; } = new() { 5, 0 };
+
+    // Debug logging
+    public bool DebugLogging { get; set; } = true;
+
+    // Notion settings
+    public bool NotionEnabled { get; set; } = false;
+    public string NotionToken { get; set; } = string.Empty;
+    public string NotionDatabaseId { get; set; } = string.Empty;
+    public bool NotionLatestOnly { get; set; } = false;
+    // Property names mapping (must exist in the target database)
+    public string NotionPropName { get; set; } = "Name";       // title
+    public string NotionPropSlot { get; set; } = "Slot";       // number
+    public string NotionPropEta { get; set; } = "ETA";         // date
+    public string NotionPropRoute { get; set; } = "Route";     // rich_text
+    public string NotionPropRank { get; set; } = "Rank";       // number
+    public string NotionPropExtId { get; set; } = "ExtId";     // rich_text (for upsert)
 
     public void Save(IDalamudPluginInterface pi)
     {

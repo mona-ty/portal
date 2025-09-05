@@ -18,6 +18,71 @@ namespace XIVSubmarinesReturn
             return t;
         }
 
+        // Enhanced parser supporting JP/EN and HH:MM:SS with second-rounding
+        private static int? TryParseDurationEx(string s)
+        {
+            try
+            {
+                var t = Normalize(s);
+                // JP common: 残り時間 / 所要時間
+                var mJp = Regex.Match(t, @"(?:残り時間?|所要時間?)[: ]*\s*(?:(?<h>\d+)\s*時間)?\s*(?:(?<m>\d+)\s*分)?", RegexOptions.CultureInvariant);
+                if (mJp.Success)
+                {
+                    int h = mJp.Groups["h"].Success ? int.Parse(mJp.Groups["h"].Value) : 0;
+                    int m = mJp.Groups["m"].Success ? int.Parse(mJp.Groups["m"].Value) : 0;
+                    if (h > 0 || m > 0) return h * 60 + m;
+                }
+                // EN: Remaining Time / ETA
+                var mEn = Regex.Match(t, @"(?i)(?:remaining\s*time|time\s*left|eta)[: ]*\s*(?:(?<h>\d+)\s*h)?\s*(?:(?<m>\d+)\s*m)?");
+                if (mEn.Success)
+                {
+                    int h = mEn.Groups["h"].Success ? int.Parse(mEn.Groups["h"].Value) : 0;
+                    int m = mEn.Groups["m"].Success ? int.Parse(mEn.Groups["m"].Value) : 0;
+                    if (h > 0 || m > 0) return h * 60 + m;
+                }
+                // JP fallback: xx時間 yy分
+                var mJp2 = Regex.Match(t, @"(?:(?<h>\d+)\s*時間)\s*(?:(?<m>\d+)\s*分)?");
+                if (mJp2.Success)
+                {
+                    int h = mJp2.Groups["h"].Success ? int.Parse(mJp2.Groups["h"].Value) : 0;
+                    int m = mJp2.Groups["m"].Success ? int.Parse(mJp2.Groups["m"].Value) : 0;
+                    if (h > 0 || m > 0) return h * 60 + m;
+                }
+                // EN generic: 1d 2h 30m 15s
+                var dEn = Regex.Match(t, @"(?i)^(?:(?<d>\d+)\s*d)?\s*(?:(?<h>\d+)\s*h)?\s*(?:(?<m>\d+)\s*m)?\s*(?:(?<s>\d+)\s*s)?\s*$");
+                if (dEn.Success && (dEn.Groups["d"].Success || dEn.Groups["h"].Success || dEn.Groups["m"].Success || dEn.Groups["s"].Success))
+                {
+                    int d = dEn.Groups["d"].Success ? int.Parse(dEn.Groups["d"].Value) : 0;
+                    int h = dEn.Groups["h"].Success ? int.Parse(dEn.Groups["h"].Value) : 0;
+                    int m = dEn.Groups["m"].Success ? int.Parse(dEn.Groups["m"].Value) : 0;
+                    int s2 = dEn.Groups["s"].Success ? int.Parse(dEn.Groups["s"].Value) : 0;
+                    long total = d * 24L * 60L + h * 60L + m + (s2 > 0 ? 1 : 0);
+                    if (total > 0) return (int)Math.Min(total, int.MaxValue);
+                }
+                // HH:MM or HH:MM:SS
+                var hm = Regex.Match(t, @"\b(?<h>\d{1,2}):(?<m>\d{2})\b");
+                if (hm.Success)
+                {
+                    int h = int.Parse(hm.Groups["h"].Value);
+                    int m = int.Parse(hm.Groups["m"].Value);
+                    if (h >= 0 && h <= 48 && m >= 0 && m < 60) return h * 60 + m;
+                }
+                var hms = Regex.Match(t, @"\b(?<h>\d{1,2}):(?<m>\d{2}):(?<s>\d{2})\b");
+                if (hms.Success)
+                {
+                    int h = int.Parse(hms.Groups["h"].Value);
+                    int m = int.Parse(hms.Groups["m"].Value);
+                    int s3 = int.Parse(hms.Groups["s"].Value);
+                    if (h >= 0 && h <= 48 && m >= 0 && m < 60 && s3 >= 0 && s3 < 60)
+                    {
+                        int total = h * 60 + m + (s3 > 0 ? 1 : 0);
+                        return total;
+                    }
+                }
+            }
+            catch { }
+            return null;
+        }
         private static int? TryParseDuration(string s)
         {
             var t = Normalize(s);
@@ -116,7 +181,7 @@ namespace XIVSubmarinesReturn
                     continue;
                 }
 
-                var minutes = TryParseDuration(s);
+                var minutes = TryParseDurationEx(s);
                 if (minutes != null)
                 {
                     if (!string.IsNullOrEmpty(current) && byName.TryGetValue(current, out var rec))
@@ -164,3 +229,4 @@ namespace XIVSubmarinesReturn
         }
     }
 }
+

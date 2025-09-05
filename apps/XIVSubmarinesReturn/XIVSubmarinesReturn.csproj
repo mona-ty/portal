@@ -70,6 +70,12 @@
     <Compile Include="src\Extractors.cs" />
     <Compile Include="src\Plugin.Stage.cs" />
     <Compile Include="src\Plugin.UI.cs" />
+    <Compile Include="src\Services\EtaFormatter.cs" />
+    <Compile Include="src\Services\AlarmScheduler.cs" />
+    <Compile Include="src\Services\DiscordNotifier.cs" />
+    <Compile Include="src\Services\GoogleCalendarClient.cs" />
+    <Compile Include="src\Services\XsrDebug.cs" />
+    <Compile Include="src\Services\NotionClient.cs" />
   </ItemGroup>
 
   <ItemGroup>

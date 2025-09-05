@@ -1,0 +1,86 @@
+はい、**可能です**。
+Cursor も Codex CLI（Cursor の Codex IDE拡張の土台）も **MCP クライアント**として動くため、**Serena MCP** を含む各種 MCP サーバーを接続できます。Cursor 側（内蔵エージェント）と Codex 側（拡張/CLI）は**設定ファイルが別**なので、両方で使いたい場合はそれぞれに登録します。([Cursor][1], [OpenAI Developers][2], [GitHub][3])
+
+---
+
+## 1) Codex（CLI/IDE拡張）に Serena をつなぐ
+
+Codex は `~/.codex/config.toml` で MCP サーバーを定義します。Serena の公式手順では **`uvx`** で起動し、**`--context codex`** を付けるのが推奨です。([GitHub][3])
+
+```toml
+# ~/.codex/config.toml
+[mcp_servers.serena]
+command = "uvx"
+args = ["--from", "git+https://github.com/oraios/serena",
+        "serena", "start-mcp-server",
+        "--context", "codex"]
+```
+
+> 使い方のコツ
+>
+> * Codex のチャットで **“Activate the current dir as project using serena”**（現在ディレクトリを Serena のプロジェクトとして有効化）と指示すると、Serena のツールが有効になります。未有効化だとツールが使えません。([GitHub][4])
+> * ログは `~/.codex/log/codex-tui.log` に出ます。Serena はデフォルトで **ローカルのダッシュボード**（`http://localhost:24282/dashboard/index.html`）も立ち上げます。 ([GitHub][4])
+
+> 補足（Windows）
+> Codex の IDE 拡張は Windows ではまだ実験的扱いで、**WSL2 推奨**です。([OpenAI Developers][2])
+
+---
+
+## 2) Cursor（内蔵エージェント）に Serena をつなぐ
+
+Cursor 自体も MCP をサポートしており、**グローバル設定 `~/.cursor/mcp.json`** または **プロジェクト設定 `.cursor/mcp.json`** に定義します。([Cursor][1])
+
+```json
+// ~/.cursor/mcp.json  または  <project>/.cursor/mcp.json
+{
+  "mcpServers": {
+    "serena": {
+      "command": "uvx",
+      "args": [
+        "--from", "git+https://github.com/oraios/serena",
+        "serena", "start-mcp-server",
+        "--context", "ide-assistant",
+        "--transport", "stdio"
+      ]
+    }
+  }
+}
+```
+
+* **`--context ide-assistant`** は IDE 連携用の推奨コンテキストです。([GitHub][4])
+* Cursor の UI で **Available Tools** に `serena` が表示されれば読み込み成功です。設定ファイルの場所や書式は Cursor 公式ドキュメントの「Using `mcp.json` / Configuration locations」を参照してください。([Cursor][1])
+* 一部の MCP は Cursor の「Browse MCP Tools」から **ワンクリック追加**にも対応しています。([Cursor][1])
+
+---
+
+## 3) よくあるハマりどころ
+
+* **設定が二系統**：Codex と Cursor は**別々の設定**。両方で使いたいなら両方に登録。([Cursor][1], [GitHub][3])
+* **`uv/uvx` の導入**：Serena は `uvx` 実行が簡単です（Astral の uv）。未導入ならインストールしてください。([GitHub][4])
+* **セキュリティ**：MCP サーバーは外部アクセスやコード操作が可能。**信頼できるサーバーのみ**導入し、キーは環境変数で与えるなど基本対策を。([Cursor][1])
+* **Codex 側の表示**：Codex でまれにツールが `failed` 表示でも、Serena は正常動作している既知事象があります（ログとダッシュボードで確認）。([GitHub][4])
+
+---
+
+## 4) Serena 以外の MCP サーバーも同様に
+
+Codex 側は `~/.codex/config.toml` の `[mcp_servers.<name>]` ブロックに、
+Cursor 側は `mcp.json` の `"mcpServers"` に追記すれば OK です（例：Snyk や Bright Data の MCP など）。([Snyk User Docs][5], [Bright Data][6])
+
+---
+
+### 参考ドキュメント
+
+* Cursor の MCP 公式ドキュメント（設定ファイル場所・`mcp.json` 例・セキュリティ注意）([Cursor][1])
+* Codex CLI（`~/.codex/config.toml` と MCP サポート）([GitHub][3])
+* Serena 公式（Codex 用設定例、`--context codex` 推奨、ダッシュボード等）([GitHub][4])
+* Codex IDE 拡張は Cursor に対応（CLI ベース）([OpenAI Developers][2])
+
+必要なら、あなたの環境（OS・WSL 有無・使いたいサーバー群）に合わせて **`mcp.json` / `config.toml` の完成版**を書き出します。設定したい MCP サーバー名を教えてください。
+
+[1]: https://docs.cursor.com/context/model-context-protocol "Cursor – Model Context Protocol (MCP)"
+[2]: https://developers.openai.com/codex/ide/ "Codex IDE extension"
+[3]: https://github.com/openai/codex "GitHub - openai/codex: Lightweight coding agent that runs in your terminal"
+[4]: https://github.com/oraios/serena "GitHub - oraios/serena: A powerful coding agent toolkit providing semantic retrieval and editing capabilities (MCP server & other integrations)"
+[5]: https://docs.snyk.io/integrations/developer-guardrails-for-agentic-workflows/quickstart-guides-for-mcp/codex-cli-guide?utm_source=chatgpt.com "Codex CLI guide | Snyk User Docs"
+[6]: https://brightdata.com/blog/ai/codex-cli-with-web-mcp?utm_source=chatgpt.com "OpenAI Codex CLI with the Bright Data Web MCP Server"

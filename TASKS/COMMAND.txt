@@ -1,0 +1,86 @@
+# 0) ブランチ&メタ
+codex run "git checkout -b feat/xsr-sprint-gcal-discord-schema-v3"
+
+# 1) Models を v3 に統一（保持: Models.cs turn0file10 の版 / 削除: 旧版）
+codex tasks add "Unify Models to v3 (Character/World/FreeCompany) and remove v2 duplicate" \
+  --files "Models.cs" --owner "xsr" --priority 1
+
+# 2) GoogleCalendarClient を Services 実装に統一（保持: GoogleCalendarClient.cs turn0file5 / 削除: Skeleton turn0file14）
+codex tasks add "Remove skeleton GoogleCalendarClient; keep Services implementation" \
+  --files "GoogleCalendarClient.cs" --owner "xsr" --priority 1
+
+# 3) Discord を Embed 実装に統一（保持: Services/DiscordNotifier.cs turn0file7 / 削除: 旧版 turn0file12）
+codex tasks add "Unify Discord notifier to embed variant; drop plain-text variant" \
+  --files "DiscordNotifier.cs" --owner "xsr" --priority 1
+
+# 4) Configuration 強化（DebugLogging / DiscordUseEmbeds を追加）
+codex patch <<'PATCH'
+*** Begin Patch
+*** Update File: Configuration.cs
+@@
+ public class Configuration : IPluginConfiguration
+ {
+@@
+     // Discord settings
+     public bool DiscordEnabled { get; set; } = false;
+     public string DiscordWebhookUrl { get; set; } = string.Empty;
+     public bool DiscordLatestOnly { get; set; } = false;
++    public bool DiscordUseEmbeds { get; set; } = true; // embed 既定 ON
+@@
+     // In-game alarm lead minutes
+     public System.Collections.Generic.List<int> AlarmLeadMinutes { get; set; } = new() { 5, 0 };
++
++    // Debug
++    public bool DebugLogging { get; set; } = true; // 配布ビルドでは false に
+*** End Patch
+PATCH
+
+# 5) UI 表記統一（Google: "Latest only" → "Earliest only (ETA min) / 最速(ETA最小)"）
+codex patch <<'PATCH'
+*** Begin Patch
+*** Update File: Plugin.UI.cs
+@@
+-                if (ImGui.RadioButton("Latest only", modeVal == 1)) { Config.GoogleEventMode = CalendarMode.Latest; SaveConfig(); }
++                if (ImGui.RadioButton("Earliest only (ETA min) / 最速(ETA最小)", modeVal == 1)) { Config.GoogleEventMode = CalendarMode.Latest; SaveConfig(); }
+*** End Patch
+PATCH
+
+# 6) BridgeWriter 呼び出し統一（Write → WriteIfChanged）
+codex patch <<'PATCH'
+*** Begin Patch
+*** Update File: Plugin.cs
+@@
+-            BridgeWriter.Write(snap);
++            BridgeWriter.WriteIfChanged(snap);
+@@
+-            BridgeWriter.Write(snap);
++            BridgeWriter.WriteIfChanged(snap);
+@@
+-                    BridgeWriter.Write(snap);
++                    BridgeWriter.WriteIfChanged(snap);
+*** End Patch
+PATCH
+
+# 7) Schema v3 自動取得（IClientState→ Snapshot へ）
+codex tasks add "Fill SubmarineSnapshot.Character/World/FreeCompany via IClientState on capture/update" \
+  --files "Plugin.cs, Models.cs" --owner "xsr" --priority 1 \
+  --desc "Use Dalamud IClientState to populate identity; null-safe; applied before BridgeWriter.WriteIfChanged and Google Upsert"
+
+# 8) Google Event ID を identity 付きに（Base32hex 化 & 小文字 a-v/0-9 のみ）
+codex tasks add "Make stable Calendar event id: xsr-{world}-{character}-{slot}-{eta} (base32hex, 5-1024)" \
+  --files "GoogleCalendarClient.cs" --owner "xsr" --priority 1
+
+# 9) Extractors: 日/秒対応 & 秒切り上げ
+codex tasks add "Extend duration parser: support 1日2時間30分15秒, EN d/h/m/s, HH:MM, second->ceil to next minute" \
+  --files "Extractors.cs" --owner "xsr" --priority 2
+
+# 10) Discord: Embed 体裁最終化（色 0x0066CC、艦名/ETA/残り/ルート/ランク）
+codex tasks add "Finalize Discord embed format and make it default (toggle via DiscordUseEmbeds)" \
+  --files "DiscordNotifier.cs, Plugin.UI.cs, Configuration.cs" --owner "xsr" --priority 2
+
+# 11) 自動テスト/自己診断
+codex tasks add "Add quick self-test for duration parsing and calendar id generator" --owner "xsr" --priority 3
+
+# 12) ドキュメント更新
+codex tasks add "Update TASKS/XSR_PLAN.md and HOWTO_GOOGLE_OAUTH.md (steps for ClientId/Secret/RefreshToken)" \
+  --owner "xsr" --priority 3

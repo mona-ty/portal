@@ -12,6 +12,8 @@ using System.Text;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using FFXIVClientStructs.FFXIV.Client.UI;
+using XIVSubmarinesReturn.Services;
+using System.Net.Http;
 
 namespace XIVSubmarinesReturn;
 
@@ -37,6 +39,12 @@ public sealed partial class Plugin : IDalamudPlugin
 
     private DateTime _lastAutoCaptureUtc = DateTime.MinValue;
     private bool _wasAddonVisible;
+    private DateTime _lastTickUtc;
+
+    private AlarmScheduler? _alarm;
+    private DiscordNotifier? _discord;
+    private GoogleCalendarClient? _gcal;
+    private NotionClient? _notion;
 
     public Plugin(
         IDalamudPluginInterface pluginInterface,
@@ -82,6 +90,18 @@ public sealed partial class Plugin : IDalamudPlugin
 
         _framework.Update += OnFrameworkUpdate;
         InitUI();
+
+        try
+        {
+            var http1 = new HttpClient();
+            var http2 = new HttpClient();
+            var http3 = new HttpClient();
+            _discord = new DiscordNotifier(Config, _log, http1);
+            _gcal = new GoogleCalendarClient(Config, _log, http2);
+            _notion = new NotionClient(Config, _log, http3);
+            _alarm = new AlarmScheduler(Config, _chat, _log, _discord, _gcal, _notion);
+        }
+        catch { }
     }
 
     public void Dispose()
@@ -108,7 +128,11 @@ public sealed partial class Plugin : IDalamudPlugin
                 return;
                 }
             }
-            BridgeWriter.Write(snap);
+            try { TrySetIdentity(snap); } catch { }
+            try { TrySetIdentity(snap); } catch { }
+            try { EtaFormatter.Enrich(snap); } catch { }
+            try { _alarm?.UpdateSnapshot(snap); } catch { }
+            BridgeWriter.WriteIfChanged(snap);
             _chat.Print($"[Submarines] JSONを書き出しました: {BridgeWriter.CurrentFilePath()}");
         }
         catch (Exception ex)
@@ -174,7 +198,9 @@ public sealed partial class Plugin : IDalamudPlugin
                 _chat.Print("[Submarines] メモリ直読に失敗しました。工房に入り直してからお試しください。");
                 return;
             }
-            BridgeWriter.Write(snap);
+            try { EtaFormatter.Enrich(snap); } catch { }
+            try { _alarm?.UpdateSnapshot(snap); } catch { }
+            BridgeWriter.WriteIfChanged(snap);
             _chat.Print($"[Submarines] JSONを書き出しました: {BridgeWriter.CurrentFilePath()} (mem)");
         }
         catch (Exception ex)
@@ -293,7 +319,8 @@ public sealed partial class Plugin : IDalamudPlugin
                 if (string.IsNullOrWhiteSpace(name))
                     continue;
 
-                var rec = new SubmarineRecord { Name = name };
+                bool wasDefault = System.Text.RegularExpressions.Regex.IsMatch(name ?? string.Empty, @"^Submarine-\d+$");
+                var rec = new SubmarineRecord { Name = name, Slot = i + 1, IsDefaultName = wasDefault };
                 // 学習済みの実艦名があれば置き換え（スロット1..4 -> 配列0..3）
                 try
                 {
@@ -301,7 +328,7 @@ public sealed partial class Plugin : IDalamudPlugin
                     if (aliases != null && i >= 0 && i < aliases.Length)
                     {
                         var alias = aliases[i];
-                        if (!string.IsNullOrWhiteSpace(alias) && System.Text.RegularExpressions.Regex.IsMatch(rec.Name ?? string.Empty, @"^Submarine-\d+$"))
+                        if (!string.IsNullOrWhiteSpace(alias) && wasDefault)
                             rec.Name = alias.Trim();
                     }
                 }
@@ -323,6 +350,7 @@ public sealed partial class Plugin : IDalamudPlugin
                     {
                         var minutes = (int)((rt - now) / 60);
                         if (minutes >= 0 && minutes <= 60 * 72) rec.DurationMinutes = minutes;
+                        rec.EtaUnix = rt;
                     }
                 }
                 catch { }
@@ -417,6 +445,9 @@ public sealed partial class Plugin : IDalamudPlugin
                 break;
             case "dumpstage":
                 CmdDumpStage();
+                break;
+            case "selftest":
+                CmdSelfTest();
                 break;
             default:
                 _chat.Print("[Submarines] Unknown subcommand. Try: /xsr help");
@@ -733,56 +764,59 @@ public sealed partial class Plugin : IDalamudPlugin
                 }
             }
 
-            try
+            if (!selectLike || Config.UseSelectStringDetailExtraction)
             {
-                var count = unit->UldManager.NodeListCount;
-                for (var i = 0; i < count; i++)
+                try
                 {
-                    var node = unit->UldManager.NodeList[i];
-                    if (node == null) continue;
-                    if (node->Type == NodeType.Text)
+                    var count = unit->UldManager.NodeListCount;
+                    for (var i = 0; i < count; i++)
                     {
-                        var text = ((AtkTextNode*)node)->NodeText.ToString();
-                        if (!string.IsNullOrWhiteSpace(text))
-                            lines.Add(text.Trim());
-                    }
-                }
-
-                var visited = new HashSet<nint>();
-                void Dfs(AtkResNode* n, int depth)
-                {
-                    if (n == null || depth > 2048) return;
-                    var key = (nint)n; if (!visited.Add(key)) return;
-                    if (n->Type == NodeType.Text)
-                    {
-                        var t = ((AtkTextNode*)n)->NodeText.ToString();
-                        if (!string.IsNullOrWhiteSpace(t)) lines.Add(t.Trim());
-                    }
-                    else if (n->Type == NodeType.Component)
-                    {
-                        try
+                        var node = unit->UldManager.NodeList[i];
+                        if (node == null) continue;
+                        if (node->Type == NodeType.Text)
                         {
-                            var comp = ((AtkComponentNode*)n)->Component;
-                            if (comp != null)
+                            var text = ((AtkTextNode*)node)->NodeText.ToString();
+                            if (!string.IsNullOrWhiteSpace(text))
+                                lines.Add(text.Trim());
+                        }
+                    }
+
+                    var visited = new HashSet<nint>();
+                    void Dfs(AtkResNode* n, int depth)
+                    {
+                        if (n == null || depth > 2048) return;
+                        var key = (nint)n; if (!visited.Add(key)) return;
+                        if (n->Type == NodeType.Text)
+                        {
+                            var t = ((AtkTextNode*)n)->NodeText.ToString();
+                            if (!string.IsNullOrWhiteSpace(t)) lines.Add(t.Trim());
+                        }
+                        else if (n->Type == NodeType.Component)
+                        {
+                            try
                             {
-                                var root = comp->UldManager.RootNode; if (root != null) Dfs(root, depth + 1);
-                                var cnt = comp->UldManager.NodeListCount;
-                                for (var j = 0; j < cnt; j++)
+                                var comp = ((AtkComponentNode*)n)->Component;
+                                if (comp != null)
                                 {
-                                    var cn = comp->UldManager.NodeList[j]; if (cn != null) Dfs(cn, depth + 1);
+                                    var root = comp->UldManager.RootNode; if (root != null) Dfs(root, depth + 1);
+                                    var cnt = comp->UldManager.NodeListCount;
+                                    for (var j = 0; j < cnt; j++)
+                                    {
+                                        var cn = comp->UldManager.NodeList[j]; if (cn != null) Dfs(cn, depth + 1);
+                                    }
                                 }
                             }
+                            catch { }
                         }
-                        catch { }
+                        if (n->ChildNode != null) Dfs(n->ChildNode, depth + 1);
+                        if (n->NextSiblingNode != null) Dfs(n->NextSiblingNode, depth);
                     }
-                    if (n->ChildNode != null) Dfs(n->ChildNode, depth + 1);
-                    if (n->NextSiblingNode != null) Dfs(n->NextSiblingNode, depth);
+                    try { if (unit->RootNode != null) Dfs(unit->RootNode, 0); } catch { }
                 }
-                try { if (unit->RootNode != null) Dfs(unit->RootNode, 0); } catch { }
-            }
-            catch (Exception ex)
-            {
-                _log.Warning(ex, "Traverse addon nodes failed");
+                catch (Exception ex)
+                {
+                    _log.Warning(ex, "Traverse addon nodes failed");
+                }
             }
 
             try { lines.RemoveAll(raw => System.Text.RegularExpressions.Regex.IsMatch(NormalizeItemText(raw ?? string.Empty), @"^Submarine-\d+$")); } catch { }
@@ -984,14 +1018,68 @@ public sealed partial class Plugin : IDalamudPlugin
                 new() { Name = "Submarine-2", RouteKey = "R-Beta", DurationMinutes = 210 }
             }
         };
-        BridgeWriter.Write(snap);
+        try { EtaFormatter.Enrich(snap); } catch { }
+        BridgeWriter.WriteIfChanged(snap);
         _chat.Print($"[Submarines] JSONを書き出しました: {BridgeWriter.CurrentFilePath()}");
     }
 
     private bool _notifiedThisVisibility;
 
+    private void CmdSelfTest()
+    {
+        try
+        {
+            var cases = new[]
+            {
+                "1d 2h 30m 15s",
+                "45m",
+                "00:07:05",
+                "1:30",
+                "16時間57分",
+                "1時間2分"
+            };
+            var lines = new List<string>();
+            lines.Add("[XSR] Duration parser self-test");
+            foreach (var s in cases)
+            {
+                try
+                {
+                    var mi = typeof(Extractors).GetMethod("TryParseDurationEx", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+                    var t = mi?.Invoke(null, new object[] { s });
+                    lines.Add($"{s} => {t ?? "null"}");
+                }
+                catch (Exception ex) { lines.Add($"{s} => error: {ex.Message}"); }
+            }
+            var dir = System.IO.Path.GetDirectoryName(BridgeWriter.CurrentFilePath()) ?? Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+            var path = System.IO.Path.Combine(dir, "selftest_report.txt");
+            System.IO.File.WriteAllLines(path, lines);
+            _chat.Print($"[Submarines] selftest written: {path}");
+        }
+        catch (Exception ex)
+        {
+            _log.Warning(ex, "CmdSelfTest failed");
+        }
+    }
+    private void TrySetIdentity(SubmarineSnapshot snap)
+    {
+        try { /* placeholder for future identity injection */ }
+        catch { }
+    }
+
     private unsafe void OnFrameworkUpdate(IFramework _)
     {
+        // 1秒間隔でアラームTick
+        try
+        {
+            var nowUtc = DateTime.UtcNow;
+            if ((nowUtc - _lastTickUtc) >= TimeSpan.FromSeconds(1))
+            {
+                _lastTickUtc = nowUtc;
+                try { _alarm?.Tick(DateTimeOffset.UtcNow); } catch { }
+            }
+        }
+        catch { }
+
         if (!Config.AutoCaptureOnWorkshopOpen) return;
         var name = Config.AddonName;
         if (string.IsNullOrWhiteSpace(name)) return;
@@ -1003,7 +1091,9 @@ public sealed partial class Plugin : IDalamudPlugin
             {
                 if (!_notifiedThisVisibility && TryCaptureFromAddon(name, out var snap))
                 {
-                    BridgeWriter.Write(snap);
+                    try { EtaFormatter.Enrich(snap); } catch { }
+                    try { _alarm?.UpdateSnapshot(snap); } catch { }
+                    BridgeWriter.WriteIfChanged(snap);
                     _chat.Print("[Submarines] 自動取得しJSONを書き出しました。");
                     _log.Info("Auto-captured and wrote JSON");
                     _notifiedThisVisibility = true; // 可視セッション中は一度だけ通知

@@ -12,3 +12,10 @@ web_search = true
 command = "npx"
 args = ["-y", "@upstash/context7-mcp@latest"]
 
+[mcp_servers.selena]
+command = "C:/Users/MonaT/.local/bin/uvx.exe"
+args = [
+  "--from", "git+https://github.com/oraios/serena",
+  "serena", "start-mcp-server",
+  "--context", "codex"
+]
