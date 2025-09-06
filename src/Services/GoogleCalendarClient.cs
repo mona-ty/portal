@@ -99,7 +99,10 @@ namespace XIVSubmarinesReturn.Services
                 var body = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
                 if (!resp.IsSuccessStatusCode)
                 {
-                    _log.Warning($"GCal token refresh failed: {(int)resp.StatusCode} {resp.ReasonPhrase} body={body}");
+                    if (_cfg.DebugLogging)
+                        _log.Warning($"GCal token refresh failed: {(int)resp.StatusCode} {resp.ReasonPhrase} body={body}");
+                    else
+                        _log.Warning($"GCal token refresh failed: {(int)resp.StatusCode} {resp.ReasonPhrase}");
                     return false;
                 }
                 using var doc = JsonDocument.Parse(body);
@@ -181,7 +184,10 @@ namespace XIVSubmarinesReturn.Services
                 if (resp.IsSuccessStatusCode) return true;
                 if (treat409AsSuccess && (int)resp.StatusCode == 409) return true;
                 var body = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
-                _log.Warning($"GCal event call failed: {(int)resp.StatusCode} {resp.ReasonPhrase} body={body}");
+                if (_cfg.DebugLogging)
+                    _log.Warning($"GCal event call failed: {(int)resp.StatusCode} {resp.ReasonPhrase} body={body}");
+                else
+                    _log.Warning($"GCal event call failed: {(int)resp.StatusCode} {resp.ReasonPhrase}");
                 return false;
             }
             catch (Exception ex)

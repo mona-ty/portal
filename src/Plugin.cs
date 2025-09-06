@@ -93,13 +93,23 @@ public sealed partial class Plugin : IDalamudPlugin
 
         try
         {
-            var http1 = new HttpClient();
-            var http2 = new HttpClient();
-            var http3 = new HttpClient();
-            _discord = new DiscordNotifier(Config, _log, http1);
-            _gcal = new GoogleCalendarClient(Config, _log, http2);
-            _notion = new NotionClient(Config, _log, http3);
+            var http = new HttpClient();
+            try
+            {
+                var ver = typeof(Plugin).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
+                http.DefaultRequestHeaders.UserAgent.Clear();
+                http.DefaultRequestHeaders.UserAgent.Add(new System.Net.Http.Headers.ProductInfoHeaderValue("XIVSubmarinesReturn", ver));
+            }
+            catch { }
+
+            _discord = new DiscordNotifier(Config, _log, http);
+            _notion = new NotionClient(Config, _log, http);
+#if XSR_FEAT_GCAL
+            _gcal = new GoogleCalendarClient(Config, _log, http);
             _alarm = new AlarmScheduler(Config, _chat, _log, _discord, _gcal, _notion);
+#else
+            _alarm = new AlarmScheduler(Config, _chat, _log, _discord, _notion);
+#endif
         }
         catch { }
     }
@@ -133,12 +143,12 @@ public sealed partial class Plugin : IDalamudPlugin
             try { EtaFormatter.Enrich(snap); } catch { }
             try { _alarm?.UpdateSnapshot(snap); } catch { }
             BridgeWriter.WriteIfChanged(snap);
-            _chat.Print($"[Submarines] JSONを書き出しました: {BridgeWriter.CurrentFilePath()}");
+            _chat.Print( $"[Submarines] JSONを書き出しました: {BridgeWriter.CurrentFilePath()}"); 
         }
         catch (Exception ex)
         {
             _log.Error(ex, "OnCmdDump failed");
-            _chat.PrintError($"[Submarines] エラー: {ex.Message}");
+            _chat.PrintError( $"[Submarines] エラー: {ex.Message}"); 
         }
     }
 
@@ -201,7 +211,7 @@ public sealed partial class Plugin : IDalamudPlugin
             try { EtaFormatter.Enrich(snap); } catch { }
             try { _alarm?.UpdateSnapshot(snap); } catch { }
             BridgeWriter.WriteIfChanged(snap);
-            _chat.Print($"[Submarines] JSONを書き出しました: {BridgeWriter.CurrentFilePath()} (mem)");
+            _chat.Print( $"[Submarines] JSONを書き出しました: {BridgeWriter.CurrentFilePath()}"); 
         }
         catch (Exception ex)
         {
@@ -1020,7 +1030,7 @@ public sealed partial class Plugin : IDalamudPlugin
         };
         try { EtaFormatter.Enrich(snap); } catch { }
         BridgeWriter.WriteIfChanged(snap);
-        _chat.Print($"[Submarines] JSONを書き出しました: {BridgeWriter.CurrentFilePath()}");
+            _chat.Print( $"[Submarines] JSONを書き出しました: {BridgeWriter.CurrentFilePath()}"); 
     }
 
     private bool _notifiedThisVisibility;
@@ -1109,4 +1119,5 @@ public sealed partial class Plugin : IDalamudPlugin
         }
     }
 }
+
 

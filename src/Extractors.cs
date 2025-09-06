@@ -7,6 +7,13 @@ namespace XIVSubmarinesReturn
 {
     internal static class Extractors
     {
+        // JP tokens (集中管理)
+        private const string J_RemainingWords = "(残り時間|所要時間|所要|残り)";
+        private const string J_Hour = "時間";
+        private const string J_Min = "分";
+        private const string J_Rank = "ランク";
+        private const string J_RouteWords = "(航路|探索|探索地|探索地点|目的地|行き先|セクター|経路)";
+        private const string J_SkipHead = "^(戻る|キャンセル|閉じる|決定)\\b";
         private static string Normalize(string s)
         {
             if (string.IsNullOrEmpty(s)) return string.Empty;
@@ -24,6 +31,14 @@ namespace XIVSubmarinesReturn
             try
             {
                 var t = Normalize(s);
+                // JP (新規): 残り時間/所要時間 パターン
+                var mJpNew = Regex.Match(t, $@"(?:{J_RemainingWords})[: ]*\s*(?:(?<h>\d+)\s*{J_Hour})?\s*(?:(?<m>\d+)\s*{J_Min})?", RegexOptions.CultureInvariant);
+                if (mJpNew.Success)
+                {
+                    int h = mJpNew.Groups["h"].Success ? int.Parse(mJpNew.Groups["h"].Value) : 0;
+                    int m = mJpNew.Groups["m"].Success ? int.Parse(mJpNew.Groups["m"].Value) : 0;
+                    if (h > 0 || m > 0) return h * 60 + m;
+                }
                 // JP common: 残り時間 / 所要時間
                 var mJp = Regex.Match(t, @"(?:残り時間?|所要時間?)[: ]*\s*(?:(?<h>\d+)\s*時間)?\s*(?:(?<m>\d+)\s*分)?", RegexOptions.CultureInvariant);
                 if (mJp.Success)
@@ -85,42 +100,9 @@ namespace XIVSubmarinesReturn
         }
         private static int? TryParseDuration(string s)
         {
-            var t = Normalize(s);
-            // JP: 残り時間 16時間57分 / 16時間 / 57分（分のみはキーワード必須）
-            var mJp = Regex.Match(t, @"(?:探索中|残り時間?|所要時間?)[: :]*\s*(?:(?<h>\d+)\s*時間)?\s*(?:(?<m>\d+)\s*分)?",
-                RegexOptions.CultureInvariant);
-            if (mJp.Success)
-            {
-                int h = mJp.Groups["h"].Success ? int.Parse(mJp.Groups["h"].Value) : 0;
-                int m = mJp.Groups["m"].Success ? int.Parse(mJp.Groups["m"].Value) : 0;
-                if (h > 0 || m > 0) return h * 60 + m;
-            }
-            // EN: Remaining Time 3h 15m / 45m（分のみはキーワード必須）
-            var mEn = Regex.Match(t, @"(?i)(?:remaining\s*time|time\s*left|eta)[: ]*\s*(?:(?<h>\d+)\s*h)?\s*(?:(?<m>\d+)\s*m)?");
-            if (mEn.Success)
-            {
-                int h = mEn.Groups["h"].Success ? int.Parse(mEn.Groups["h"].Value) : 0;
-                int m = mEn.Groups["m"].Success ? int.Parse(mEn.Groups["m"].Value) : 0;
-                if (h > 0 || m > 0) return h * 60 + m;
-            }
-            // JP fallback: 「xx時間yy分」単独
-            var mJp2 = Regex.Match(t, @"(?:(?<h>\d+)\s*時間)\s*(?:(?<m>\d+)\s*分)?");
-            if (mJp2.Success)
-            {
-                int h = mJp2.Groups["h"].Success ? int.Parse(mJp2.Groups["h"].Value) : 0;
-                int m = mJp2.Groups["m"].Success ? int.Parse(mJp2.Groups["m"].Value) : 0;
-                if (h > 0 || m > 0) return h * 60 + m;
-            }
-            // HH:MM 形式
-            var hm = Regex.Match(t, @"\b(?<h>\d{1,2}):(?<m>\d{2})\b");
-            if (hm.Success)
-            {
-                int h = int.Parse(hm.Groups["h"].Value);
-                int m = int.Parse(hm.Groups["m"].Value);
-                if (h >= 0 && h <= 48 && m >= 0 && m < 60) return h * 60 + m;
-            }
-            return null;
+            return TryParseDurationEx(s);
         }
+
 
         public static bool ExtractFromLines(List<string> lines, SubmarineSnapshot snapshot)
         {
@@ -137,6 +119,8 @@ namespace XIVSubmarinesReturn
             {
                 var s = Normalize(ln ?? string.Empty);
                 if (string.IsNullOrEmpty(s)) continue;
+                // ノイズ行の早期スキップ
+                try { if (Regex.IsMatch(s, J_SkipHead)) continue; } catch { }
 
                 // “Submarine-<n>” は艦名ではなくスロット名。採用せずスキップ。
                 if (Regex.IsMatch(s, @"^Submarine-\d+\b", RegexOptions.CultureInvariant))
@@ -144,6 +128,19 @@ namespace XIVSubmarinesReturn
                     current = null;
                     continue;
                 }
+
+                // JPランク（先行検出）
+                try
+                {
+                    var mRankNew = Regex.Match(s, $@"(?:(?i)rank|{J_Rank})\s*(?<r>\d+)");
+                    if (mRankNew.Success && !string.IsNullOrEmpty(current) && byName.TryGetValue(current, out var recRank))
+                    {
+                        recRank.Rank = int.Parse(mRankNew.Groups["r"].Value);
+                        trace.Add($"rank <- '{s}' => {recRank.Name}:{recRank.Rank}");
+                        continue;
+                    }
+                }
+                catch { }
 
                 // 任意艦名（キーワードが含まれない先頭行を名前候補とする）
                 if (!Regex.IsMatch(s, @"(残り時間|探索中|所要時間|rank|ランク|航路|探索地|探索先|目的地|sector|route|destination)", RegexOptions.IgnoreCase))
@@ -192,6 +189,23 @@ namespace XIVSubmarinesReturn
                     continue;
                 }
 
+                // JPルート（先行検出）
+                try
+                {
+                    var mRouteJpNew = Regex.Match(s, $@"(?:{J_RouteWords})[::\s]+(?<route>.+)");
+                    if (mRouteJpNew.Success)
+                    {
+                        var val = mRouteJpNew.Groups["route"].Value.Trim();
+                        if (!string.IsNullOrEmpty(current) && byName.TryGetValue(current, out var rec2) && string.IsNullOrEmpty(rec2.RouteKey))
+                        {
+                            rec2.RouteKey = val;
+                            trace.Add($"route <- '{s}' => {rec2.Name}:{val}");
+                            continue;
+                        }
+                    }
+                }
+                catch { }
+
                 var mRouteJp = Regex.Match(s, @"(?:航路|探索地|探索先|探索場所|目的地|探索地点|行き先|行先)[::\s]+(?<route>.+)");
                 if (mRouteJp.Success)
                 {
@@ -229,4 +243,6 @@ namespace XIVSubmarinesReturn
         }
     }
 }
+
+
 

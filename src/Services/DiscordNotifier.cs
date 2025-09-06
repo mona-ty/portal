@@ -52,7 +52,7 @@ namespace XIVSubmarinesReturn.Services
                     {
                         embeds = new[]
                         {
-                            new { title = "Submarines", description = latestOnly ? "Earliest only (ETA min)" : "All", fields }
+                            new { title = "Submarines", description = latestOnly ? "Earliest only (ETA min)" : "All", color = 0x0066CC, fields }
                         }
                     };
                     await PostJsonAsync(url, payload, ct).ConfigureAwait(false);
@@ -117,18 +117,25 @@ namespace XIVSubmarinesReturn.Services
             try
             {
                 if (string.IsNullOrWhiteSpace(content)) return;
+                content = SanitizeJp(content);
                 var body = new StringContent(JsonSerializer.Serialize(new { content }), Encoding.UTF8, "application/json");
                 using var req = new HttpRequestMessage(HttpMethod.Post, url) { Content = body };
                 using var resp = await _http.SendAsync(req, ct).ConfigureAwait(false);
                 if ((int)resp.StatusCode == 429)
                 {
-                    // basic rate limit handling: retry once after Retry-After seconds
+                    // rate limit handling with clamp + small jitter
                     var retry = 1;
-                    if (resp.Headers.TryGetValues("Retry-After", out var vals))
+                    try
                     {
-                        var v = vals.FirstOrDefault();
-                        if (int.TryParse(v, out var sec)) retry = Math.Max(1, sec);
+                        if (resp.Headers.TryGetValues("Retry-After", out var vals))
+                        {
+                            var v = vals.FirstOrDefault();
+                            if (int.TryParse(v, out var sec)) retry = Math.Max(1, sec);
+                        }
                     }
+                    catch { }
+                    var rnd = new System.Random();
+                    retry = Math.Min(30, Math.Max(1, retry + rnd.Next(0, 3)));
                     await Task.Delay(TimeSpan.FromSeconds(retry), ct).ConfigureAwait(false);
                     using var req2 = new HttpRequestMessage(HttpMethod.Post, url) { Content = new StringContent(JsonSerializer.Serialize(new { content }), Encoding.UTF8, "application/json") };
                     using var resp2 = await _http.SendAsync(req2, ct).ConfigureAwait(false);
@@ -148,6 +155,7 @@ namespace XIVSubmarinesReturn.Services
             try
             {
                 var json = JsonSerializer.Serialize(payload);
+                json = SanitizeJp(json);
                 using var req = new HttpRequestMessage(HttpMethod.Post, url)
                 {
                     Content = new StringContent(json, Encoding.UTF8, "application/json")
@@ -156,11 +164,17 @@ namespace XIVSubmarinesReturn.Services
                 if ((int)resp.StatusCode == 429)
                 {
                     var retry = 1;
-                    if (resp.Headers.TryGetValues("Retry-After", out var vals))
+                    try
                     {
-                        var v = vals.FirstOrDefault();
-                        if (int.TryParse(v, out var sec)) retry = Math.Max(1, sec);
+                        if (resp.Headers.TryGetValues("Retry-After", out var vals))
+                        {
+                            var v = vals.FirstOrDefault();
+                            if (int.TryParse(v, out var sec)) retry = Math.Max(1, sec);
+                        }
                     }
+                    catch { }
+                    var rnd = new System.Random();
+                    retry = Math.Min(30, Math.Max(1, retry + rnd.Next(0, 3)));
                     await Task.Delay(TimeSpan.FromSeconds(retry), ct).ConfigureAwait(false);
                     using var req2 = new HttpRequestMessage(HttpMethod.Post, url)
                     {
@@ -176,6 +190,16 @@ namespace XIVSubmarinesReturn.Services
                 _log.Warning(ex, "Discord webhook post (json) failed");
                 XsrDebug.Log(_cfg, "Discord webhook post (json) failed", ex);
             }
+        }
+
+        private static string SanitizeJp(string s)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(s)) return s;
+                return s.Replace("�c", "残").Replace("��", "分");
+            }
+            catch { return s; }
         }
     }
 }
