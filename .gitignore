@@ -68,3 +68,5 @@ archive/*
 # Temporary files (local, not tracked)
 tmp/
 
+# Obsidian vault (personal notes)
+/notes/

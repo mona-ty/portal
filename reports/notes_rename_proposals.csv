@@ -1,0 +1,96 @@
+file,title_or_stem,suggested_name,same_as_current,reason
+notes\MK\2025-07-02.md,2025-07-02,2025-07-02.md,yes,use-file-stem
+notes\MK\2025-08-29.md,2025-08-29,2025-08-29.md,yes,use-file-stem
+notes\MK\AI-idea\DeNAの「AIにオールイン」.md,DeNAにおけるAI活用最前線,DeNAにおけるAI活用最前線.md,no,use-h1-title
+notes\MK\AI-idea\Gemini CLI.md,Gemini CLIとは何か、その背景と競合,Gemini-CLIとは何か、その背景と競合.md,no,use-h1-title
+notes\MK\ASMR\ASMR改良版プロンプト.md,🍇 ASMR動画プロンプト（果物10種 × 改良版構成）,🍇-ASMR動画プロンプト（果物10種-×-改良版構成）.md,no,use-h1-title
+notes\MK\ASMR\ASMR改良版プロンプト用ハッシュタグ.md,🎬 TikTok投稿テンプレート（タイトル＋ハッシュタグ）,🎬-TikTok投稿テンプレート（タイトル＋ハッシュタグ）.md,no,use-h1-title
+notes\MK\ASMR\SNSショート動画バズり徹底分析.md,SNSショート動画バズり徹底分析,SNSショート動画バズり徹底分析.md,yes,use-file-stem
+notes\MK\ASMR\tiktok asmrキャプション集.md,🎬 TikTok ASMR動画スクリプト + キャプション集（ガラス果物）,🎬-TikTok-ASMR動画スクリプト-+-キャプション集（ガラス果物）.md,no,use-h1-title
+notes\MK\ASMR\TikTok ASMR動画企画.md,引用文献,引用文献.md,no,use-h1-title
+notes\MK\ASMR\日本国内SNSトレンド分析レポート.md,日本国内SNSトレンド分析レポート：TikTok・X・Instagramの最新動向と動画制作への応用戦略,日本国内SNSトレンド分析レポート：TikTok・X・Instagramの最新動向と動画制作への応用戦略.md,no,use-h1-title
+notes\MK\chatgpt\deepresearch\deepresearch向け検索クエリ例.md,deepresearch向け検索クエリ例,deepresearch向け検索クエリ例.md,yes,use-file-stem
+notes\MK\chatgpt\deepresearch\出力レイアウト仕様（Markdown）.md,TL;DR,TL;DR.md,no,use-h1-title
+notes\MK\chatgpt\deepresearch\採点ルーブリック（JSON：0–5点、重み付き合計で推奨を決定）.md,採点ルーブリック（JSON：0–5点、重み付き合計で推奨を決定）,採点ルーブリック（JSON：0–5点、重み付き合計で推奨を決定）.md,yes,use-file-stem
+notes\MK\chatgpt\deepresearch\最短版プロンプト（埋め済み・コピペ用）.md,最短版プロンプト（埋め済み・コピペ用）,最短版プロンプト（埋め済み・コピペ用）.md,yes,use-file-stem
+notes\MK\chatgpt\deepresearch\詳細リサーチ・ブリーフ（YAML：埋め済み・編集可）.md,詳細リサーチ・ブリーフ（YAML：埋め済み・編集可）,詳細リサーチ・ブリーフ（YAML：埋め済み・編集可）.md,yes,use-file-stem
+notes\MK\chatgpt\ideas\ChatGPT 出力 Obsidian 保存.md,✅ 目的,✅-目的.md,no,use-h1-title
+notes\MK\chatgpt\ideas\ダイエット計画プロンプト_v2.md,ダイエット計画プロンプト v2（プロンプトエンジニアリング最適化版）,ダイエット計画プロンプト-v2（プロンプトエンジニアリング最適化版）.md,no,use-h1-title
+notes\MK\chatgpt\pronmpts\tiktok動画生成プロンプト1️⃣.md,tiktok動画生成プロンプト1️⃣,tiktok動画生成プロンプト1️⃣.md,yes,use-file-stem
+notes\MK\chatgpt\pronmpts\TikTok投稿用コンテンツ自動生成プロンプト V4（ASMRクリスタル果物）.md,🎬 TikTok投稿用コンテンツ自動生成プロンプト V4（ASMR / クリスタル果物）,🎬-TikTok投稿用コンテンツ自動生成プロンプト-V4（ASMR-クリスタル果物）.md,no,use-h1-title
+notes\MK\chatgpt\pronmpts\★Prompt Create Prompt.md,回答例（TikTokでバズを狙うAI動画プロンプト生成用）,回答例（TikTokでバズを狙うAI動画プロンプト生成用）.md,no,use-h1-title
+notes\MK\chatgpt\pronmpts\クリスタル果物切断ASMR動画生成プロンプト.md,🎯 目的,🎯-目的.md,no,use-h1-title
+notes\MK\chatgpt\pronmpts\動画生成プロンプト(meta3).md,🎯 あなたの目的：,🎯-あなたの目的：.md,no,use-h1-title
+notes\MK\chatgpt\pronmpts\映像生成ツール向けプロンプト.md,🎥 英語プロンプト（映像生成ツール向け）,🎥-英語プロンプト（映像生成ツール向け）.md,no,use-h1-title
+notes\MK\chatgpt\pronmpts\深堀りprompt.md,深堀りprompt,深堀りprompt.md,yes,use-file-stem
+notes\MK\chatgpt\pronmpts_output\Crystal Fruit ASMR Prompt Collection.md,🍎 Crystal Fruit ASMR Prompt Collection,🍎-Crystal-Fruit-ASMR-Prompt-Collection.md,no,use-h1-title
+notes\MK\chatgpt\pronmpts_output\crystal_fruit_prompts (1).md,Crystal Strawberry,Crystal-Strawberry.md,no,use-h1-title
+notes\MK\chatgpt\pronmpts_output\crystal_fruit_prompts.md,crystal_fruit_prompts,crystal_fruit_prompts.md,yes,use-file-stem
+notes\MK\chatgpt\pronmpts_output\crystal_fruit_prompts_v5.md,🎥 英語プロンプト – Crystal Lemon,🎥-英語プロンプト-–-Crystal-Lemon.md,no,use-h1-title
+notes\MK\chatgpt\pronmpts_output\Crystal_Video_Prompts_Veo.md,Crystal_Video_Prompts_Veo,Crystal_Video_Prompts_Veo.md,yes,use-file-stem
+notes\MK\chatgpt\pronmpts_output\CrystalFruit_ASMR_Prompts_Veo (1).md,🍎 Crystal Fruit ASMR Prompts for Veo,🍎-Crystal-Fruit-ASMR-Prompts-for-Veo.md,no,use-h1-title
+notes\MK\chatgpt\pronmpts_output\cyber_crystal_food_prompts 1.md,1. Neon Seaweed Ramen – Spiral Vortex Loop,1.-Neon-Seaweed-Ramen-–-Spiral-Vortex-Loop.md,no,use-h1-title
+notes\MK\chatgpt\pronmpts_output\cyber_crystal_food_v2_all_1to10.md,2. Cyber Wasabi Gyoza – Reactor Core Bloom (v2),2.-Cyber-Wasabi-Gyoza-–-Reactor-Core-Bloom-(v2).md,no,use-h1-title
+notes\MK\chatgpt\Sora_prompt_output\sora_crystal_fruits_prompts.md,🍇 Sora用クリスタル果物プロンプト集（20種）,🍇-Sora用クリスタル果物プロンプト集（20種）.md,no,use-h1-title
+notes\MK\chatgpt\Sora_prompt_output\sora_mechanical_mineral_fruits.md,🔧 Sora用プロンプト集 – 機械果物 & 鉱物果物（6種）,🔧-Sora用プロンプト集-–-機械果物-&-鉱物果物（6種）.md,no,use-h1-title
+notes\MK\chatgpt\Template\prompt-eval-template.md,📊 プロンプト評価テンプレート,📊-プロンプト評価テンプレート.md,no,use-h1-title
+notes\MK\chatgpt\Template\Sora用映像生成プロンプトテンプレート（英語）.md,🎥 Sora用映像生成プロンプトテンプレート（英語）,🎥-Sora用映像生成プロンプトテンプレート（英語）.md,no,use-h1-title
+notes\MK\chatgpt\Template\Veo用映像生成プロンプトテンプレート（英語）.md,🎥 Veo用映像生成プロンプトテンプレート（英語）,🎥-Veo用映像生成プロンプトテンプレート（英語）.md,no,use-h1-title
+notes\MK\Clippings\2025年版 生成AI・大規模言語モデルを学ぶための30冊（必須5冊+定番15冊+差をつける10冊）.md,ユーザ系,ユーザ系.md,no,use-h1-title
+notes\MK\Clippings\ChatGPTに悩みを相談し続けて4カ月、「あ、ヤバいかも」と思った話.md,言語化することの弊害,言語化することの弊害.md,no,use-h1-title
+notes\MK\Clippings\Claude Code HooksとGemini CLIで始めるAIパイプライン実行｜松濤Vimmer.md,Claude Code HooksとGemini CLIで始めるAIパイプライン実行,Claude-Code-HooksとGemini-CLIで始めるAIパイプライン実行.md,no,use-h1-title
+notes\MK\Clippings\Codex CLIを使いこなすための機能・設定まとめ.md,はじめに,はじめに.md,no,use-h1-title
+notes\MK\Clippings\FF14総合分析と戦略考察.md,FF14総合分析と戦略考察,FF14総合分析と戦略考察.md,yes,use-file-stem
+notes\MK\Clippings\Findings from a Pilot Anthropic - OpenAI Alignment Evaluation Exercise.md,パイロットアントロピック - OpenAIアライメント評価演習からの知見,パイロットアントロピック-OpenAIアライメント評価演習からの知見.md,no,use-h1-title
+notes\MK\Clippings\Findings from a pilot Anthropic–OpenAI alignment evaluation exercise OpenAI Safety Tests.md,導入,導入.md,no,use-h1-title
+"notes\MK\Clippings\GPT, Gemini, Claude使い分け2025年9月初めバージョン｜erukiti.md","GPT, Gemini, Claude使い分け2025年9月初めバージョン","GPT,-Gemini,-Claude使い分け2025年9月初めバージョン.md",no,use-h1-title
+notes\MK\Clippings\kindle unlimited + Obsidian　が読書において最強な話｜tomo@ビジネススキル向上のお手伝い.md,kindle unlimited + Obsidian　が読書において最強な話｜tomo@ビジネススキル向上のお手伝い,kindle-unlimited-+-Obsidian-が読書において最強な話｜tomo@ビジネススキル向上のお手伝い.md,no,use-file-stem
+notes\MK\Clippings\MOD文化とMODツールの使用について.md,トピックス,トピックス.md,no,use-h1-title
+notes\MK\Clippings\o3 MCPでClaude Codeが最強の検索力を手に入れた.md,登録方法,登録方法.md,no,use-h1-title
+notes\MK\Clippings\Obsidian×Cursorの活用方法：知的生産のシナジーを最大化｜Shin.md,Obsidian×Cursorの活用方法：知的生産のシナジーを最大化,Obsidian×Cursorの活用方法：知的生産のシナジーを最大化.md,no,use-h1-title
+notes\MK\Clippings\Obsidianをワタシはこう使っております。実際の使い方と同期についてのお話。｜おかか容疑者.md,Obsidianをワタシはこう使っております。実際の使い方と同期についてのお話。,Obsidianをワタシはこう使っております。実際の使い方と同期についてのお話。.md,no,use-h1-title
+notes\MK\Clippings\RTA in Japan 2025年夏.md,2025年夏季 日本におけるRTA,2025年夏季-日本におけるRTA.md,no,use-h1-title
+notes\MK\Clippings\「進捗どうですか？」が怖くなくなる思考法 - 「作業ログ」から「未来の地図」へ.md,はじめに,はじめに.md,no,use-h1-title
+notes\MK\Clippings\【2025年最新】Obsidian × AIでメモが変わる！無料プラグイン「Smart Composer」を徹底解説します！.md,【2025年最新】Obsidian × AIでメモが変わる！無料プラグイン「Smart Composer」を徹底解説します！,【2025年最新】Obsidian-×-AIでメモが変わる！無料プラグイン「Smart-Composer」を徹底解説します！.md,no,use-file-stem
+notes\MK\Clippings\【Obsidian×Cursor】AI時代の知的生産術！使い方や活用事例まで徹底解説｜ChatGPT研究所.md,【Obsidian×Cursor】AI時代の知的生産術！使い方や活用事例まで徹底解説,【Obsidian×Cursor】AI時代の知的生産術！使い方や活用事例まで徹底解説.md,no,use-h1-title
+notes\MK\Clippings\【Obsidianの使い方が変わる】Gemini CLIは、あなたの思考に寄り添う「無料の執事」｜少し明るい高橋くん.md,【Obsidianの使い方が変わる】Gemini CLIは、あなたの思考に寄り添う「無料の執事」,【Obsidianの使い方が変わる】Gemini-CLIは、あなたの思考に寄り添う「無料の執事」.md,no,use-h1-title
+notes\MK\Clippings\【Suno.aiで稼ぐ④】Spotify配信から3ヶ月、ついに〇万円稼げました。｜AI FREAK - 最新のAIツールをご紹介 1.md,【第1弾】,【第1弾】.md,no,use-h1-title
+notes\MK\Clippings\【必見】改良版まじん式プロンプト！｜まじん.md,"【必見】""改良版""まじん式プロンプト！",【必見】改良版まじん式プロンプト！.md,no,use-h1-title
+notes\MK\Clippings\もう手放せない！Gemini の NotebookLM、Deep Research、Canvas で思考を加速（Google Cloud Next Tokyo '25セッションレポート）.md,セッションの概要,セッションの概要.md,no,use-h1-title
+notes\MK\Clippings\個人開発で月20万円を目指すための考え方.md,開発したアプリ,開発したアプリ.md,no,use-h1-title
+notes\MK\Clippings\先輩社員がどうやって不具合を解決しているのか 1.md,自己紹介,自己紹介.md,no,use-h1-title
+notes\MK\Clippings\新Codex CLIの使い方.md,サブスクリプションの制限,サブスクリプションの制限.md,no,use-h1-title
+notes\MK\Clippings\角田裕毅 F1オランダGP展望「精神的にも肉体的にも強くなれた」.md,角田裕毅 F1オランダGP展望「精神的にも肉体的にも強くなれた」,角田裕毅-F1オランダGP展望「精神的にも肉体的にも強くなれた」.md,no,use-file-stem
+notes\MK\Clippings\解像度を上げる 🔬.md,馬田隆明 / 馬田隆明,馬田隆明-馬田隆明.md,no,use-h1-title
+notes\MK\Clippings\非エンジニアでもできる！AI駆動PMの可能性　〜 Obsidian × Cursor 〜｜すぅ  AI駆動PM.md,非エンジニアでもできる！AI駆動PMの可能性　〜 Obsidian × Cursor 〜,非エンジニアでもできる！AI駆動PMの可能性-〜-Obsidian-×-Cursor-〜.md,no,use-h1-title
+notes\MK\copilot-custom-prompts\Emojify.md,Emojify,Emojify.md,yes,use-file-stem
+notes\MK\copilot-custom-prompts\Explain like I am 5.md,Explain like I am 5,Explain-like-I-am-5.md,no,use-file-stem
+notes\MK\copilot-custom-prompts\Fix grammar and spelling.md,Fix grammar and spelling,Fix-grammar-and-spelling.md,no,use-file-stem
+notes\MK\copilot-custom-prompts\Generate glossary.md,Generate glossary,Generate-glossary.md,no,use-file-stem
+notes\MK\copilot-custom-prompts\Generate table of contents.md,Generate table of contents,Generate-table-of-contents.md,no,use-file-stem
+notes\MK\copilot-custom-prompts\Make longer.md,Make longer,Make-longer.md,no,use-file-stem
+notes\MK\copilot-custom-prompts\Make shorter.md,Make shorter,Make-shorter.md,no,use-file-stem
+notes\MK\copilot-custom-prompts\Remove URLs.md,Remove URLs,Remove-URLs.md,no,use-file-stem
+notes\MK\copilot-custom-prompts\Rewrite as tweet thread.md,Rewrite as tweet thread,Rewrite-as-tweet-thread.md,no,use-file-stem
+notes\MK\copilot-custom-prompts\Rewrite as tweet.md,Rewrite as tweet,Rewrite-as-tweet.md,no,use-file-stem
+notes\MK\copilot-custom-prompts\Simplify.md,Simplify,Simplify.md,yes,use-file-stem
+notes\MK\copilot-custom-prompts\Summarize.md,Summarize,Summarize.md,yes,use-file-stem
+notes\MK\copilot-custom-prompts\Translate to Chinese.md,Translate to Chinese,Translate-to-Chinese.md,no,use-file-stem
+notes\MK\daily\2025-05-01.md,2025-05-01,2025-05-01.md,yes,use-file-stem
+notes\MK\daily\2025-06-29.md,2025-06-29,2025-06-29.md,yes,use-file-stem
+notes\MK\daily\2025-06-30.md,2025-06-30,2025-06-30.md,yes,use-file-stem
+notes\MK\daily\2025-07-01.md,2025-07-01,2025-07-01.md,yes,use-file-stem
+notes\MK\daily\2025-13-01.md,2025-13-01,2025-13-01.md,yes,use-file-stem
+notes\MK\gemini 2.5 proでスライド生成させる(deep reserarch結果を渡す).md,**1.0 PRIMARY\_OBJECTIVE — 最終目標**,1.0-PRIMARY_OBJECTIVE-—-最終目標.md,no,use-h1-title
+notes\MK\iPhoneClip\ObsidianとGemini CLIで知識を育てる：第二の脳を構築する実践ガイド.md,はじめに,はじめに.md,no,use-h1-title
+notes\MK\iPhoneClip\科学的にわかってきた、運がいい人の正体.md,科学が証明した「運を作る思い込み」,科学が証明した「運を作る思い込み」.md,no,use-h1-title
+notes\MK\README.md,"ffxiv-return-agent (Windows 11-friendly skeleton, .NET 8)","ffxiv-return-agent-(Windows-11-friendly-skeleton,-.NET-8).md",no,use-h1-title
+notes\MK\restaurant\ランドーズ 池袋東口駅前店 （LANDooZ）のご予約 - 池袋居酒屋  食べログ.md,NEW OPEN◆池袋駅1分◆肉料理や世界のクラフトビールが楽しめる大人の隠れ家。個室あり◎,NEW-OPEN◆池袋駅1分◆肉料理や世界のクラフトビールが楽しめる大人の隠れ家。個室あり◎.md,no,use-h1-title
+notes\MK\restaurant\内観写真   昔ばなし 別館 （ムカシバナシ） - 池袋居酒屋  食べログ.md,店舗基本情報,店舗基本情報.md,no,use-h1-title
+notes\MK\restaurant\地図  立喰い寿司 あきら - 新橋立ち食い寿司  食べログ.md,地図  立喰い寿司 あきら - 新橋立ち食い寿司  食べログ,地図-立喰い寿司-あきら-新橋立ち食い寿司-食べログ.md,no,use-file-stem
+notes\MK\restaurant\焼鶏 吉川のご予約 - 代々木焼き鳥  食べログ.md,代々木駅1分◆すべて、手作りです！あったかい居酒屋さん！,代々木駅1分◆すべて、手作りです！あったかい居酒屋さん！.md,no,use-h1-title
+notes\MK\textgenerator\configs\llm\config_6-29135137.json.md,config_6-29135137.json,config_6-29135137.json.md,yes,use-file-stem
+notes\MK\減量\90kg→70kg_減量計画.md,減量計画全体概要（90kg → 70kg）,減量計画全体概要（90kg-→-70kg）.md,no,use-h1-title
+notes\MK\減量\ストレッチ＆有酸素メニュー詳細（90kg→70kg 減量支援）.md,ストレッチ＆有酸素メニュー詳細（90kg→70kg 減量支援）,ストレッチ＆有酸素メニュー詳細（90kg→70kg-減量支援）.md,no,use-h1-title
+notes\MK\減量\ダイエット計画_Kanban_Phase1_2.md.md,📅 Phase 1：導入期（週1〜4）,📅-Phase-1：導入期（週1〜4）.md,no,use-h1-title
+notes\MK\調査チェックリスト.md,調査チェックリスト（個人向け・Obsidian/Notion固有の確認観点）,調査チェックリスト（個人向け・ObsidianNotion固有の確認観点）.md,no,use-h1-title

@@ -1,0 +1,21 @@
+Changed files:
+- apps/XIVSubmarinesReturn/src/Configuration.cs
+- apps/XIVSubmarinesReturn/src/Plugin.cs
+- apps/XIVSubmarinesReturn/src/Plugin.UI.cs
+- apps/XIVSubmarinesReturn/src/Services/AlarmScheduler.cs
+- apps/XIVSubmarinesReturn/src/Services/DiscordNotifier.cs
+- apps/XIVSubmarinesReturn/src/Services/EtaFormatter.cs
+- apps/XIVSubmarinesReturn/src/Services/GoogleCalendarClient.cs
+- apps/XIVSubmarinesReturn/src/Services/NotionClient.cs
+- apps/XIVSubmarinesReturn/src/Extractors.cs
+- apps/XIVSubmarinesReturn/DalamudPackager.targets
+
+Build (DLL only):
+  dotnet build apps\XIVSubmarinesReturn\XIVSubmarinesReturn.csproj -c Release -p:Platform=x64 -p:SkipPack=true
+
+Manual checks:
+- Notion: PerSlot動作、Validate properties
+- Discord: 日本語（残/分）出力、429再送
+- Dump/Auto-capture: 取得失敗/成功/例外の日本語出力
+- Alarm: lead遷移で一度だけ「(残 n分)」通知
+- UI Tabs: Overview / Snapshot の切替、Snapshot表の6列表示

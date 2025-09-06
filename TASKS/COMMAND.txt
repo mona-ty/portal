@@ -1,86 +1,130 @@
-# 0) ブランチ&メタ
-codex run "git checkout -b feat/xsr-sprint-gcal-discord-schema-v3"
+以下を**そのまま Codex に貼り付け**てください（超短縮版）。
+目的：**最小差分で安定化 & 使い勝手向上**（Alarmバグ、重複呼び出し、既定値、UI 概要強化、MainUI導線）。
 
-# 1) Models を v3 に統一（保持: Models.cs turn0file10 の版 / 削除: 旧版）
-codex tasks add "Unify Models to v3 (Character/World/FreeCompany) and remove v2 duplicate" \
-  --files "Models.cs" --owner "xsr" --priority 1
+---
 
-# 2) GoogleCalendarClient を Services 実装に統一（保持: GoogleCalendarClient.cs turn0file5 / 削除: Skeleton turn0file14）
-codex tasks add "Remove skeleton GoogleCalendarClient; keep Services implementation" \
-  --files "GoogleCalendarClient.cs" --owner "xsr" --priority 1
+## 🔧 Codex 実装修正ブリーフ（Ultra‑Short）
 
-# 3) Discord を Embed 実装に統一（保持: Services/DiscordNotifier.cs turn0file7 / 削除: 旧版 turn0file12）
-codex tasks add "Unify Discord notifier to embed variant; drop plain-text variant" \
-  --files "DiscordNotifier.cs" --owner "xsr" --priority 1
+**Repo/Proj**: `apps/XIVSubmarinesReturn`（.NET 9 / Dalamud）
+**Build (DLLのみ)**:
 
-# 4) Configuration 強化（DebugLogging / DiscordUseEmbeds を追加）
-codex patch <<'PATCH'
-*** Begin Patch
-*** Update File: Configuration.cs
-@@
- public class Configuration : IPluginConfiguration
- {
-@@
-     // Discord settings
-     public bool DiscordEnabled { get; set; } = false;
-     public string DiscordWebhookUrl { get; set; } = string.Empty;
-     public bool DiscordLatestOnly { get; set; } = false;
-+    public bool DiscordUseEmbeds { get; set; } = true; // embed 既定 ON
-@@
-     // In-game alarm lead minutes
-     public System.Collections.Generic.List<int> AlarmLeadMinutes { get; set; } = new() { 5, 0 };
-+
-+    // Debug
-+    public bool DebugLogging { get; set; } = true; // 配布ビルドでは false に
-*** End Patch
-PATCH
+```
+dotnet build apps\XIVSubmarinesReturn\XIVSubmarinesReturn.csproj -c Release -p:Platform=x64 -p:SkipPack=true
+```
 
-# 5) UI 表記統一（Google: "Latest only" → "Earliest only (ETA min) / 最速(ETA最小)"）
-codex patch <<'PATCH'
-*** Begin Patch
-*** Update File: Plugin.UI.cs
-@@
--                if (ImGui.RadioButton("Latest only", modeVal == 1)) { Config.GoogleEventMode = CalendarMode.Latest; SaveConfig(); }
-+                if (ImGui.RadioButton("Earliest only (ETA min) / 最速(ETA最小)", modeVal == 1)) { Config.GoogleEventMode = CalendarMode.Latest; SaveConfig(); }
-*** End Patch
-PATCH
+（既存手順を踏襲）&#x20;
 
-# 6) BridgeWriter 呼び出し統一（Write → WriteIfChanged）
-codex patch <<'PATCH'
-*** Begin Patch
-*** Update File: Plugin.cs
-@@
--            BridgeWriter.Write(snap);
-+            BridgeWriter.WriteIfChanged(snap);
-@@
--            BridgeWriter.Write(snap);
-+            BridgeWriter.WriteIfChanged(snap);
-@@
--                    BridgeWriter.Write(snap);
-+                    BridgeWriter.WriteIfChanged(snap);
-*** End Patch
-PATCH
+---
 
-# 7) Schema v3 自動取得（IClientState→ Snapshot へ）
-codex tasks add "Fill SubmarineSnapshot.Character/World/FreeCompany via IClientState on capture/update" \
-  --files "Plugin.cs, Models.cs" --owner "xsr" --priority 1 \
-  --desc "Use Dalamud IClientState to populate identity; null-safe; applied before BridgeWriter.WriteIfChanged and Google Upsert"
+### T1 — Alarm 遷移検出の安定化（prev 分の永続化 + 廃棄）
 
-# 8) Google Event ID を identity 付きに（Base32hex 化 & 小文字 a-v/0-9 のみ）
-codex tasks add "Make stable Calendar event id: xsr-{world}-{character}-{slot}-{eta} (base32hex, 5-1024)" \
-  --files "GoogleCalendarClient.cs" --owner "xsr" --priority 1
+**Edit**: `src/Services/AlarmScheduler.cs`
 
-# 9) Extractors: 日/秒対応 & 秒切り上げ
-codex tasks add "Extend duration parser: support 1日2時間30分15秒, EN d/h/m/s, HH:MM, second->ceil to next minute" \
-  --files "Extractors.cs" --owner "xsr" --priority 2
+1. `Tick(DateTimeOffset now)` 冒頭でアクティブキー収集用を定義：
 
-# 10) Discord: Embed 体裁最終化（色 0x0066CC、艦名/ETA/残り/ルート/ランク）
-codex tasks add "Finalize Discord embed format and make it default (toggle via DiscordUseEmbeds)" \
-  --files "DiscordNotifier.cs, Plugin.UI.cs, Configuration.cs" --owner "xsr" --priority 2
+```csharp
+var activeKeys = new HashSet<string>(StringComparer.Ordinal);
+```
 
-# 11) 自動テスト/自己診断
-codex tasks add "Add quick self-test for duration parsing and calendar id generator" --owner "xsr" --priority 3
+2. `foreach (var it in items)` の**中**で `idKey` 生成後に追記：
 
-# 12) ドキュメント更新
-codex tasks add "Update TASKS/XSR_PLAN.md and HOWTO_GOOGLE_OAUTH.md (steps for ClientId/Secret/RefreshToken)" \
-  --owner "xsr" --priority 3
+```csharp
+activeKeys.Add(idKey);
+// ... ループ末尾（lead 走査の外側）で現在分を保存
+_prevMins[idKey] = mins;
+```
+
+3. `foreach (var it in items)` **終了後**、古いキーをクリーンアップ：
+
+```csharp
+foreach (var k in _prevMins.Keys.ToList())
+    if (!activeKeys.Contains(k)) _prevMins.Remove(k);
+```
+
+> これにより `prev > lead && now <= lead` の**境界交差**が連続 Tick でも正確に 1 回だけ発火します。現状は `_prevMins` が更新されず検出が不安定。&#x20;
+
+---
+
+### T2 — 重複呼び出しの削除（TrySetIdentity 二重）
+
+**Edit**: `src/Plugin.cs` の `OnCmdDump(...)`
+`TrySetIdentity(snap);` が**2回**連続で呼ばれているので**1回にする**（前者のみ残す）。
+
+> ノイズ削減 & 可観測性の一貫化。&#x20;
+
+---
+
+### T3 — 既定値の見直し（安定版デフォルト）
+
+**Edit**: `src/Configuration.cs`
+`DebugLogging` の初期値を **false** に設定。UI 側の説明は現状維持（必要であれば「詳細は Debug タブ」程度を追記）。
+
+> 変更ファイル群に `Configuration.cs` が含まれており既定値の調整はここで完結します。&#x20;
+
+---
+
+### T4 — UI 概要（Overview）に “今ほしい情報” を追加
+
+**Edit**: `src/Plugin.UI.cs`
+
+1. \*\*タブバー（最小）\*\*を導入：`Overview / Capture / Alarm / Discord / Notion / Advanced / Debug`
+
+   ```csharp
+   if (ImGui.BeginTabBar("xsr-tabs")) {
+     if (ImGui.BeginTabItem("Overview")) { DrawOverview(); ImGui.EndTabItem(); }
+     if (ImGui.BeginTabItem("Capture"))  { DrawCapture();  ImGui.EndTabItem(); }
+     if (ImGui.BeginTabItem("Alarm"))    { DrawAlarm();    ImGui.EndTabItem(); }
+     if (ImGui.BeginTabItem("Discord"))  { DrawDiscord();  ImGui.EndTabItem(); }
+     if (ImGui.BeginTabItem("Notion"))   { DrawNotion();   ImGui.EndTabItem(); }
+     if (ImGui.BeginTabItem("Advanced")) { DrawAdvanced(); ImGui.EndTabItem(); }
+     if (ImGui.BeginTabItem("Debug"))    { DrawDebug();    ImGui.EndTabItem(); }
+     ImGui.EndTabBar();
+   }
+   ```
+
+   （既存 UI を大きく崩さず**最小分割**）&#x20;
+
+2. **Overview 表**に以下の列を追加：`ETA(local) / Remaining / Route(short)`
+
+   * `it.Extra["EtaLocal"]` / `it.Extra["RemainingText"]` / `it.Extra["RouteShort"]` を利用（Discord で既に使用中の値と同一ロジック）。
+   * 取得できない場合は `"?"` フォールバック。
+
+   ```csharp
+   var eta = it.Extra != null && it.Extra.TryGetValue("EtaLocal", out var t) ? t : "?";
+   var rem = it.Extra != null && it.Extra.TryGetValue("RemainingText", out var rm) ? rm : "?";
+   var rt  = it.Extra != null && it.Extra.TryGetValue("RouteShort", out var r) ? r : it.RouteKey;
+   ```
+
+   > これらの追加情報は `DiscordNotifier.BuildSnapshotLine` ですでに整備済み。UI へ**転用**するだけで体験が大幅に向上します。&#x20;
+
+---
+
+### T5 — Main UI 起動導線（Dalamud v9）
+
+**Edit**: `src/Plugin.cs`（UI 初期化箇所）
+
+```csharp
+_pi.UiBuilder.OpenMainUi += () => _showUI = true;
+```
+
+> インストーラ等の “Open Main UI” と整合。現状の `OpenConfigUi` とは**別導線**として追加。&#x20;
+
+---
+
+## ✅ 回帰/受け入れ基準（最小）
+
+* **Alarm**：`prev=lead+1 → now=lead` で 1 回のみ通知。`prev=lead-1 → now=lead-1` は不発。再 Tick でも重複しない（T1）。&#x20;
+* **Dump**：チャット出力・内部処理に重複がない（T2）。&#x20;
+* **既定値**：新規構成で `DebugLogging=false`（T3）。&#x20;
+* **Overview**：`ETA(local)/Remaining/Route(short)` が読める（T4）。値は Discord と一致（目視）。（T4）&#x20;
+* **Main UI**：インストーラの “Open Main UI” でメイン UI が確実に開く（T5）。&#x20;
+
+---
+
+### 参考（現状サマリ）
+
+今回の改修は直近のレビュー＆変更まとめの延長線で、**小さな差分**で完了します（変更ファイル一覧・実施内容は以下）。
+
+---
+
+以上。

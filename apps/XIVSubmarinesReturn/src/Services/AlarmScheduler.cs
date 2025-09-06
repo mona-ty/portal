@@ -18,21 +18,30 @@ namespace XIVSubmarinesReturn.Services
         private readonly Dalamud.Plugin.Services.IChatGui _chat;
         private readonly Dalamud.Plugin.Services.IPluginLog _log;
         private readonly IDiscordNotifier _discord;
+#if XSR_FEAT_GCAL
         private readonly IGoogleCalendarClient _gcal;
+#endif
         private readonly INotionClient? _notion;
 
         private readonly object _gate = new();
         private SubmarineSnapshot? _current;
         private readonly HashSet<string> _fired = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, int> _prevMins = new(StringComparer.Ordinal);
 
         public AlarmScheduler(Configuration cfg,
             Dalamud.Plugin.Services.IChatGui chat,
             Dalamud.Plugin.Services.IPluginLog log,
             IDiscordNotifier discord,
+#if XSR_FEAT_GCAL
             IGoogleCalendarClient gcal,
+#endif
             INotionClient? notion = null)
         {
-            _cfg = cfg; _chat = chat; _log = log; _discord = discord; _gcal = gcal; _notion = notion;
+            _cfg = cfg; _chat = chat; _log = log; _discord = discord;
+#if XSR_FEAT_GCAL
+            _gcal = gcal;
+#endif
+            _notion = notion;
         }
 
         public void UpdateSnapshot(SubmarineSnapshot snap)
@@ -55,6 +64,8 @@ namespace XIVSubmarinesReturn.Services
                 });
 
                 // Google Calendar upsert（非同期）
+                // Google Calendar upsert (optional)
+#if XSR_FEAT_GCAL
                 _ = Task.Run(async () =>
                 {
                     try
@@ -65,6 +76,7 @@ namespace XIVSubmarinesReturn.Services
                     catch (Exception ex) { _log.Warning(ex, "GCal upsert task failed"); }
                 });
 
+#endif
                 // Notion upsert（非同期）
                 _ = Task.Run(async () =>
                 {
@@ -89,16 +101,20 @@ namespace XIVSubmarinesReturn.Services
                 }
                 if (items == null || items.Count == 0) return;
                 var leads = _cfg.AlarmLeadMinutes ?? new List<int>();
-                if (leads.Count == 0) return;
+                if (!_cfg.GameAlarmEnabled || leads.Count == 0) return;
 
                 foreach (var it in items)
                 {
                     if (!it.EtaUnix.HasValue || it.EtaUnix.Value <= 0) continue;
                     var eta = DateTimeOffset.FromUnixTimeSeconds(it.EtaUnix.Value);
                     var mins = (int)Math.Round((eta - now).TotalMinutes);
+                    
+var idKey = $"{(it.Slot ?? 0)}-{(it.EtaUnix ?? 0)}";
+                    
+var hadPrev = _prevMins.TryGetValue(idKey, out var prevMins);
                     foreach (var lead in leads)
                     {
-                        if (mins == lead)
+                        if ((hadPrev && prevMins > lead && mins <= lead) || (!hadPrev && mins == lead))
                         {
                             var key = $"{it.Slot ?? 0}-{it.EtaUnix ?? 0}-{lead}";
                             if (_fired.Add(key))
@@ -143,3 +159,4 @@ namespace XIVSubmarinesReturn.Services
         }
     }
 }
+

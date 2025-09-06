@@ -5,6 +5,18 @@ namespace XIVSubmarinesReturn;
 
 public enum CalendarMode { All, Latest }
 
+public enum RouteDisplayMode { Letters, ShortIds, Raw }
+
+public enum NotionKeyMode
+{
+    // 同一スロットで同一ページに更新（推奨）
+    PerSlot = 0,
+    // ルートも含めて分岐
+    PerSlotRoute = 1,
+    // 旧方式（便ごとに別ページ）
+    PerVoyage = 2,
+}
+
 public class Configuration : IPluginConfiguration
 {
     public int Version { get; set; } = 1;
@@ -35,6 +47,9 @@ public class Configuration : IPluginConfiguration
     // ルート名マッピング (Point ID -> 表示名)
     public System.Collections.Generic.Dictionary<byte, string> RouteNames { get; set; } = new();
 
+    // ルート表示モード（学習済みレター > P番号 > 原文）
+    public RouteDisplayMode RouteDisplay { get; set; } = RouteDisplayMode.Letters;
+
     // Discord embeds (duplicated below for grouping – keep single definition)
     // public bool DiscordUseEmbeds { get; set; } = false;
 
@@ -54,6 +69,7 @@ public class Configuration : IPluginConfiguration
     public bool DiscordUseEmbeds { get; set; } = true;
 
     // In-game alarm lead minutes
+    public bool GameAlarmEnabled { get; set; } = true;
     public System.Collections.Generic.List<int> AlarmLeadMinutes { get; set; } = new() { 5, 0 };
 
     // Debug logging
@@ -64,6 +80,7 @@ public class Configuration : IPluginConfiguration
     public string NotionToken { get; set; } = string.Empty;
     public string NotionDatabaseId { get; set; } = string.Empty;
     public bool NotionLatestOnly { get; set; } = false;
+    public NotionKeyMode NotionKeyMode { get; set; } = NotionKeyMode.PerSlot;
     // Property names mapping (must exist in the target database)
     public string NotionPropName { get; set; } = "Name";       // title
     public string NotionPropSlot { get; set; } = "Slot";       // number
@@ -71,6 +88,11 @@ public class Configuration : IPluginConfiguration
     public string NotionPropRoute { get; set; } = "Route";     // rich_text
     public string NotionPropRank { get; set; } = "Rank";       // number
     public string NotionPropExtId { get; set; } = "ExtId";     // rich_text (for upsert)
+    // v2 additions
+    public string NotionPropRemaining { get; set; } = "Remaining";   // rich_text
+    public string NotionPropWorld { get; set; } = "World";           // rich_text
+    public string NotionPropCharacter { get; set; } = "Character";   // rich_text
+    public string NotionPropFC { get; set; } = "FC";                 // rich_text
 
     public void Save(IDalamudPluginInterface pi)
     {

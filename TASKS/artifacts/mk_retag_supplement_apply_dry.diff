@@ -1,0 +1,471 @@
+--- a/notes/MK/10_research/(記事一覧).md
++++ b/notes/MK/10_research/(記事一覧).md
+@@ -3,8 +3,9 @@
+ status: draft
+ created: 2025-09-06
+ updated: 2025-09-06
++tags: [記事一覧, auto-generated, created, resolve, status]
+ ---
+ 
+ # (記事一覧)
+ 
+-> Stub note (auto-generated to resolve a link).
++> Stub note (auto-generated to resolve a link).
+--- a/notes/MK/10_research/2025-06-30.md
++++ b/notes/MK/10_research/2025-06-30.md
+@@ -1,5 +1,5 @@
+ ---
+-tags: [chatgpt, gpt4, プロンプト, daily]
++tags: [chatgpt, gpt4, プロンプト, daily, created]
+ title: 2025-06-30
+ status: draft
+ created: 2025-06-30
+--- a/notes/MK/10_research/2025-07-02.md
++++ b/notes/MK/10_research/2025-07-02.md
+@@ -1,5 +1,5 @@
+ ---
+-tags: [twitter]
++tags: [twitter, created, status]
+ title: 2025-07-02
+ status: draft
+ created: 2025-07-02
+--- a/notes/MK/10_research/2025-08-29.md
++++ b/notes/MK/10_research/2025-08-29.md
+@@ -1,5 +1,5 @@
+ ---
+-tags: [monat, obsidian]
++tags: [monat, obsidian, created, status]
+ title: 2025-08-29
+ status: draft
+ created: 2025-08-29
+--- a/notes/MK/10_research/2025-13-01.md
++++ b/notes/MK/10_research/2025-13-01.md
+@@ -1,5 +1,5 @@
+ ---
+-tags: [aaaa, daily]
++tags: [aaaa, daily, created, status]
+ title: 2025-13-01
+ status: draft
+ created: 2025-09-01
+--- a/notes/MK/10_research/AI FREAK - 最新のAIツールをご紹介.md
++++ b/notes/MK/10_research/AI FREAK - 最新のAIツールをご紹介.md
+@@ -3,8 +3,9 @@
+ status: draft
+ created: 2025-09-06
+ updated: 2025-09-06
++tags: [freak, ツール, ツールをご紹介, 最新の, auto-generated]
+ ---
+ 
+ # AI FREAK - 最新のAIツールをご紹介
+ 
+-> Stub note (auto-generated to resolve a link).
++> Stub note (auto-generated to resolve a link).
+--- a/notes/MK/10_research/aokikenichi.md
++++ b/notes/MK/10_research/aokikenichi.md
+@@ -3,8 +3,9 @@
+ status: draft
+ created: 2025-09-06
+ updated: 2025-09-06
++tags: [aokikenichi, auto-generated, created, resolve, status]
+ ---
+ 
+ # aokikenichi
+ 
+-> Stub note (auto-generated to resolve a link).
++> Stub note (auto-generated to resolve a link).
+--- a/notes/MK/10_research/ChatGPT研究所.md
++++ b/notes/MK/10_research/ChatGPT研究所.md
+@@ -3,8 +3,9 @@
+ status: draft
+ created: 2025-09-06
+ updated: 2025-09-06
++tags: [chatgpt, 研究所, auto-generated, created, resolve]
+ ---
+ 
+ # ChatGPT研究所
+ 
+-> Stub note (auto-generated to resolve a link).
++> Stub note (auto-generated to resolve a link).
+--- a/notes/MK/10_research/config_6-29135137.json.md
++++ b/notes/MK/10_research/config_6-29135137.json.md
+@@ -1,5 +1,5 @@
+ ---
+-tags: [openai, configs, llm, textgenerator]
++tags: [openai, configs, llm, textgenerator, config]
+ title: config_6-29135137.json
+ status: draft
+ created: 2025-06-29
+--- a/notes/MK/10_research/erukiti.md
++++ b/notes/MK/10_research/erukiti.md
+@@ -3,8 +3,9 @@
+ status: draft
+ created: 2025-09-06
+ updated: 2025-09-06
++tags: [erukiti, auto-generated, created, resolve, status]
+ ---
+ 
+ # erukiti
+ 
+-> Stub note (auto-generated to resolve a link).
++> Stub note (auto-generated to resolve a link).
+--- a/notes/MK/10_research/F1-Gate.com 編集部.md
++++ b/notes/MK/10_research/F1-Gate.com 編集部.md
+@@ -3,8 +3,9 @@
+ status: draft
+ created: 2025-09-06
+ updated: 2025-09-06
++tags: [f1-gate, 編集部, auto-generated, created, resolve]
+ ---
+ 
+ # F1-Gate.com 編集部
+ 
+-> Stub note (auto-generated to resolve a link).
++> Stub note (auto-generated to resolve a link).
+--- a/notes/MK/10_research/ggen-ryu-dohara.md
++++ b/notes/MK/10_research/ggen-ryu-dohara.md
+@@ -3,8 +3,9 @@
+ status: draft
+ created: 2025-09-06
+ updated: 2025-09-06
++tags: [ggen-ryu-dohara, auto-generated, created, resolve, status]
+ ---
+ 
+ # ggen-ryu-dohara
+ 
+-> Stub note (auto-generated to resolve a link).
++> Stub note (auto-generated to resolve a link).
+--- a/notes/MK/10_research/Google Docs.md
++++ b/notes/MK/10_research/Google Docs.md
+@@ -3,8 +3,9 @@
+ status: draft
+ created: 2025-09-06
+ updated: 2025-09-06
++tags: [docs, google, auto-generated, created, resolve]
+ ---
+ 
+ # Google Docs
+ 
+-> Stub note (auto-generated to resolve a link).
++> Stub note (auto-generated to resolve a link).
+--- a/notes/MK/10_research/LTD..md
++++ b/notes/MK/10_research/LTD..md
+@@ -3,8 +3,9 @@
+ status: draft
+ created: 2025-09-06
+ updated: 2025-09-06
++tags: [ltd, auto-generated, created, resolve, status]
+ ---
+ 
+ # LTD.
+ 
+-> Stub note (auto-generated to resolve a link).
++> Stub note (auto-generated to resolve a link).
+--- a/notes/MK/10_research/Rei丨暮らしとNotion。.md
++++ b/notes/MK/10_research/Rei丨暮らしとNotion。.md
+@@ -3,8 +3,9 @@
+ status: draft
+ created: 2025-09-06
+ updated: 2025-09-06
++tags: [notion, rei, 丨暮らしと, auto-generated, created]
+ ---
+ 
+ # Rei丨暮らしとNotion。
+ 
+-> Stub note (auto-generated to resolve a link).
++> Stub note (auto-generated to resolve a link).
+--- a/notes/MK/10_research/sakes9.md
++++ b/notes/MK/10_research/sakes9.md
+@@ -3,8 +3,9 @@
+ status: draft
+ created: 2025-09-06
+ updated: 2025-09-06
++tags: [sakes9, auto-generated, created, resolve, status]
+ ---
+ 
+ # sakes9
+ 
+-> Stub note (auto-generated to resolve a link).
++> Stub note (auto-generated to resolve a link).
+--- a/notes/MK/10_research/Shin.md
++++ b/notes/MK/10_research/Shin.md
+@@ -3,8 +3,9 @@
+ status: draft
+ created: 2025-09-06
+ updated: 2025-09-06
++tags: [shin, auto-generated, created, resolve, status]
+ ---
+ 
+ # Shin
+ 
+-> Stub note (auto-generated to resolve a link).
++> Stub note (auto-generated to resolve a link).
+--- a/notes/MK/10_research/SNSショート動画バズり徹底分析.md
++++ b/notes/MK/10_research/SNSショート動画バズり徹底分析.md
+@@ -1,5 +1,5 @@
+ ---
+-tags: [asmr]
++tags: [asmr, created, sns, status, ショート]
+ title: SNSショート動画バズり徹底分析
+ status: draft
+ created: 2025-09-06
+--- a/notes/MK/10_research/SQUARE ENIX CO..md
++++ b/notes/MK/10_research/SQUARE ENIX CO..md
+@@ -3,8 +3,9 @@
+ status: draft
+ created: 2025-09-06
+ updated: 2025-09-06
++tags: [enix, square, auto-generated, created, resolve]
+ ---
+ 
+ # SQUARE ENIX CO.
+ 
+-> Stub note (auto-generated to resolve a link).
++> Stub note (auto-generated to resolve a link).
+--- a/notes/MK/10_research/Takaaki Umada/馬田隆明.md
++++ b/notes/MK/10_research/Takaaki Umada/馬田隆明.md
+@@ -3,8 +3,9 @@
+ status: draft
+ created: 2025-09-06
+ updated: 2025-09-06
++tags: [馬田隆明, auto-generated, created, resolve, status]
+ ---
+ 
+ # 馬田隆明
+ 
+-> Stub note (auto-generated to resolve a link).
++> Stub note (auto-generated to resolve a link).
+--- a/notes/MK/10_research/tomo@ビジネススキル向上のお手伝い.md
++++ b/notes/MK/10_research/tomo@ビジネススキル向上のお手伝い.md
+@@ -3,8 +3,9 @@
+ status: draft
+ created: 2025-09-06
+ updated: 2025-09-06
++tags: [tomo, ビジネススキル, ビジネススキル向上のお手, 伝い, auto-generated]
+ ---
+ 
+ # tomo@ビジネススキル向上のお手伝い
+ 
+-> Stub note (auto-generated to resolve a link).
++> Stub note (auto-generated to resolve a link).
+--- a/notes/MK/10_research/Zenn.md
++++ b/notes/MK/10_research/Zenn.md
+@@ -3,8 +3,9 @@
+ status: draft
+ created: 2025-09-06
+ updated: 2025-09-06
++tags: [zenn, auto-generated, created, resolve, status]
+ ---
+ 
+ # Zenn
+ 
+-> Stub note (auto-generated to resolve a link).
++> Stub note (auto-generated to resolve a link).
+--- a/notes/MK/10_research/おかか容疑者.md
++++ b/notes/MK/10_research/おかか容疑者.md
+@@ -3,8 +3,9 @@
+ status: draft
+ created: 2025-09-06
+ updated: 2025-09-06
++tags: [おかか容疑者, auto-generated, created, resolve, status]
+ ---
+ 
+ # おかか容疑者
+ 
+-> Stub note (auto-generated to resolve a link).
++> Stub note (auto-generated to resolve a link).
+--- a/notes/MK/10_research/ここに画像URLを貼る.md
++++ b/notes/MK/10_research/ここに画像URLを貼る.md
+@@ -3,8 +3,9 @@
+ status: draft
+ created: 2025-09-06
+ updated: 2025-09-06
++tags: [url, ここに画像, を貼る, auto-generated, created]
+ ---
+ 
+ # ここに画像URLを貼る
+ 
+-> Stub note (auto-generated to resolve a link).
++> Stub note (auto-generated to resolve a link).
+--- a/notes/MK/10_research/まじん.md
++++ b/notes/MK/10_research/まじん.md
+@@ -3,8 +3,9 @@
+ status: draft
+ created: 2025-09-06
+ updated: 2025-09-06
++tags: [まじん, auto-generated, created, resolve, status]
+ ---
+ 
+ # まじん
+ 
+-> Stub note (auto-generated to resolve a link).
++> Stub note (auto-generated to resolve a link).
+--- a/notes/MK/10_research/オープンAI.md
++++ b/notes/MK/10_research/オープンAI.md
+@@ -3,8 +3,9 @@
+ status: draft
+ created: 2025-09-06
+ updated: 2025-09-06
++tags: [オープン, auto-generated, created, resolve, status]
+ ---
+ 
+ # オープンAI
+ 
+-> Stub note (auto-generated to resolve a link).
++> Stub note (auto-generated to resolve a link).
+--- a/notes/MK/10_research/ライフハッカー・ジャパン編集部.md
++++ b/notes/MK/10_research/ライフハッカー・ジャパン編集部.md
+@@ -3,8 +3,9 @@
+ status: draft
+ created: 2025-09-06
+ updated: 2025-09-06
++tags: [ライフハッカー, ジャパン, ジャパン編集部, auto-generated, created]
+ ---
+ 
+ # ライフハッカー・ジャパン編集部
+ 
+-> Stub note (auto-generated to resolve a link).
++> Stub note (auto-generated to resolve a link).
+--- a/notes/MK/10_research/岡村彩加.md
++++ b/notes/MK/10_research/岡村彩加.md
+@@ -3,8 +3,9 @@
+ status: draft
+ created: 2025-09-06
+ updated: 2025-09-06
++tags: [岡村彩加, auto-generated, created, resolve, status]
+ ---
+ 
+ # 岡村彩加
+ 
+-> Stub note (auto-generated to resolve a link).
++> Stub note (auto-generated to resolve a link).
+--- a/notes/MK/50_code/crystal_fruit_prompts.md
++++ b/notes/MK/50_code/crystal_fruit_prompts.md
+@@ -1,5 +1,5 @@
+ ---
+-tags: [chatgpt, output, pronmpts]
++tags: [chatgpt, output, pronmpts, created, crystal]
+ title: crystal_fruit_prompts
+ status: draft
+ created: 2025-07-05
+--- a/notes/MK/50_code/crystal_fruit_prompts_v5.md
++++ b/notes/MK/50_code/crystal_fruit_prompts_v5.md
+@@ -1,5 +1,5 @@
+ ---
+-tags: [chatgpt, output, pronmpts]
++tags: [chatgpt, output, pronmpts, created, crystal]
+ title: 🎥 英語プロンプト – Crystal Lemon
+ status: draft
+ created: 2025-07-05
+--- a/notes/MK/50_code/Crystal_Video_Prompts_Veo.md
++++ b/notes/MK/50_code/Crystal_Video_Prompts_Veo.md
+@@ -1,5 +1,5 @@
+ ---
+-tags: [chatgpt, output, pronmpts]
++tags: [chatgpt, output, pronmpts, created, crystal]
+ title: Crystal_Video_Prompts_Veo
+ status: draft
+ created: 2025-07-05
+--- a/notes/MK/50_code/laiso.md
++++ b/notes/MK/50_code/laiso.md
+@@ -3,8 +3,9 @@
+ status: draft
+ created: 2025-09-06
+ updated: 2025-09-06
++tags: [laiso, auto-generated, created, resolve, status]
+ ---
+ 
+ # laiso
+ 
+-> Stub note (auto-generated to resolve a link).
++> Stub note (auto-generated to resolve a link).
+--- a/notes/MK/50_code/opengl-8080.md
++++ b/notes/MK/50_code/opengl-8080.md
+@@ -3,8 +3,9 @@
+ status: draft
+ created: 2025-09-06
+ updated: 2025-09-06
++tags: [opengl-8080, auto-generated, created, resolve, status]
+ ---
+ 
+ # opengl-8080
+ 
+-> Stub note (auto-generated to resolve a link).
++> Stub note (auto-generated to resolve a link).
+--- a/notes/MK/50_code/png-.jpg-.jpeg-.gif-.webp.md
++++ b/notes/MK/50_code/png-.jpg-.jpeg-.gif-.webp.md
+@@ -3,8 +3,9 @@
+ status: draft
+ created: 2025-09-06
+ updated: 2025-09-06
++tags: [gif-, jpeg-, jpg-, png-, webp]
+ ---
+ 
+ # png-.jpg-.jpeg-.gif-.webp
+ 
+-> Stub note (auto-generated to resolve a link).
++> Stub note (auto-generated to resolve a link).
+--- a/notes/MK/50_code/すぅ.md
++++ b/notes/MK/50_code/すぅ.md
+@@ -3,8 +3,9 @@
+ status: draft
+ created: 2025-09-06
+ updated: 2025-09-06
++tags: [すぅ, auto-generated, created, resolve, status]
+ ---
+ 
+ # すぅ
+ 
+-> Stub note (auto-generated to resolve a link).
++> Stub note (auto-generated to resolve a link).
+--- a/notes/MK/50_code/ノート名.md
++++ b/notes/MK/50_code/ノート名.md
+@@ -3,8 +3,9 @@
+ status: draft
+ created: 2025-09-06
+ updated: 2025-09-06
++tags: [ノート, ノート名, auto-generated, created, resolve]
+ ---
+ 
+ # ノート名
+ 
+-> Stub note (auto-generated to resolve a link).
++> Stub note (auto-generated to resolve a link).
+--- a/notes/MK/50_code/プロジェクト計画書テンプレート.pdf.md
++++ b/notes/MK/50_code/プロジェクト計画書テンプレート.pdf.md
+@@ -3,8 +3,9 @@
+ status: draft
+ created: 2025-09-06
+ updated: 2025-09-06
++tags: [テンプレート, プロジェクト, プロジェクト計画書テンプ, レート, auto-generated]
+ ---
+ 
+ # プロジェクト計画書テンプレート.pdf
+ 
+-> Stub note (auto-generated to resolve a link).
++> Stub note (auto-generated to resolve a link).
+--- a/notes/MK/50_code/少し明るい高橋くん.md
++++ b/notes/MK/50_code/少し明るい高橋くん.md
+@@ -3,8 +3,9 @@
+ status: draft
+ created: 2025-09-06
+ updated: 2025-09-06
++tags: [少し明るい高橋くん, auto-generated, created, resolve, status]
+ ---
+ 
+ # 少し明るい高橋くん
+ 
+-> Stub note (auto-generated to resolve a link).
++> Stub note (auto-generated to resolve a link).
+--- a/notes/MK/50_code/松濤Vimmer.md
++++ b/notes/MK/50_code/松濤Vimmer.md
+@@ -3,8 +3,9 @@
+ status: draft
+ created: 2025-09-06
+ updated: 2025-09-06
++tags: [vimmer, 松濤, auto-generated, created, resolve]
+ ---
+ 
+ # 松濤Vimmer
+ 
+-> Stub note (auto-generated to resolve a link).
++> Stub note (auto-generated to resolve a link).

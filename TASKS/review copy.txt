@@ -1,0 +1,213 @@
+了解しました。安定版リリース前に **UI を含めて全体を再整理**するためのレビューと、すぐ反映できる改善プランをまとめます。
+以下は **現状の把握→課題→UI再設計案→出荷チェックリスト→実装タスク（Codex向け）** の順です。必要な箇所で添付コードと外部仕様を併記します。
+
+---
+
+## 1) 現状の把握（抜粋）
+
+**機能フロー**
+
+* 取得経路：`/xsr dump` でアドオン→テキスト抽出→解析→JSON、必要に応じてメモリフォールバック（`UseMemoryFallback`）。工房UIの可視化をトリガーに自動取得も実装済みです。
+* 解析：SelectString優先のテキスト収集＋詳細パネルの“追い取り”、日本語/英語の残り時間・ランク・航路を抽出する正規表現を集中管理（`Extractors`）。
+* 付加情報：ETA/残り時間（人間可読）・短縮ルート文字列（P15>P20 形式など）を `EtaFormatter` で付与。
+* 身元情報：`IClientState` から Character / World / FC(タグ) を `TrySetIdentity` で注入。自動取得や手動ダンプの直前に呼ばれています。
+
+**連携**
+
+* **Discord**：スナップショット/アラーム通知。`embeds[0].color = 0x0066CC` を付けた埋め込み送信と 429 → `Retry-After` 再送の処理あり。日本語文字化けの簡易サニタイズ（「�c」→「残」等）も実装済み。
+  ↪ 参考：Discord は 429 時に `Retry-After` を見て待つのが公式の推奨です。([Discord][1])
+* **Notion**：Database Upsert。ETA は Notion の Date に **`time_zone:"Asia/Tokyo"`** を指定し、`start` はオフセット無しの `yyyy-MM-dd'T'HH:mm:ss` で送っています（JST表記安定化）。429 時の簡易リトライあり。
+  ↪ 参考：Notion は 1インテグレーションあたり **平均 3 req/s** が目安。429 でスローダウン推奨。([Notion Developers][2])
+  ↪ `time_zone` サポートは公式にアナウンスされており、タイムゾーン指定時は日時の取り扱いが異なる点に留意（UTC デフォルト等）。([Notion Developers][3])
+
+**UI（ImGui）**
+
+* 主要トグル（Auto-capture、Memory fallback ほか）、アドオン名、スロット別エイリアス編集、Discord/Notion セクション（Test ボタンあり）、Alarm リード分、簡易テーブル（Name/Rank/ETA(min)/Route）、ルート名マップ編集、Probe 出力、Debug 操作などが **1ウィンドウ** に縦積みで配置されています。GCal セクションは `#if XSR_FEAT_GCAL` で非表示化済み（ソフト無効化）。
+  ↪ `AlarmScheduler` 側でも GCal 呼び出しがコンパイルガード下にあります。
+
+**既定値（抜粋）**
+
+* `AggressiveFallback=true`, `UseSelectStringExtraction=true`, `DebugLogging=true`, `DiscordUseEmbeds=true` など。安定版向けに一部は見直し候補です。
+
+---
+
+## 2) 課題と改善ポイント（要約）
+
+1. **UI 情報密度/動線**
+   すべてが1画面に縦積みで、設定・デバッグ・表示が混在。**タブ化**して役割別に分離すると可読性が大きく向上します（下 §3 のタブ構成案）。Dear ImGui の TabBar での分割が適しています。([GitHub][4], [lemonate.io][5])
+
+2. **コピー（日本語の統一・重複出力）**
+   `Plugin.cs` に一部メッセージの**重複出力**が残っています（例：設定UIを開いた旨、学習失敗/成功などが2行）。**安定版では重複を除去**し、文言を統一しましょう。
+
+3. **安定運用に向けた既定値**
+   `DebugLogging` は ON が初期値ですが、**安定版は OFF**を推奨（必要時のみON）。`AggressiveFallback` はデフォルトONでも良いですが、「結果が怪しいときにだけONにする」説明を併記するのが親切です。
+
+4. **Snapshot 表の情報設計**
+   現在は Rank/ETA(min)/Route。`EtaFormatter` で持っている **`EtaLocal` と `RemainingText`** を表に反映すると “あと何分/何時に帰還” が即読できます。クリックで RouteShort コピーなどの細かな利便性も追加すると良いです。
+
+5. **「Test Notion/Discord」導線**
+   今は Notion テストが `AlarmScheduler.UpdateSnapshot` を経由（非同期）で動く構成。テスト押下時は **即時に 1 レコード送る専用メソッド**を Notion クライアントに用意すると、ユーザーの手応えが速く、デバッグもしやすいです。&#x20;
+
+6. **Dalamud v9 の UI イベント対応**
+   メインUI起動は `UiBuilder.OpenMainUi` が推奨されます。インストーラ上の “Open Main UI” ボタンとの整合が取れるため、**Main/Config を明確化**するとUXが上がります。([Dalamud][6])
+
+7. **Rate Limit の明示**
+   Discord/Notion は 429 時の扱いを UI 説明に明記し、**再送の待機ロジック**（`Retry-After` 準拠）を案内するとトラブルシュートに役立ちます。 ([Discord][1], [Notion Developers][2])
+
+---
+
+## 3) UI 再設計案（タブ構成 & 最小差分コード）
+
+**推奨タブ構成**
+
+1. **Overview**（読み取り専用）
+
+   * 現在のスナップショット表：`Name / Rank / ETA(ローカル) / 残り / ルート(短縮)`
+   * 右上に「Capture(UI) / Capture(Memory) / Open folder」ショートカット
+   * 画面下部に `_uiStatus`（色付き/アイコン付き）
+   * ヘッダに Character / World / FC（取得できた場合のみ表示）
+     → 表示は `EtaFormatter` の `EtaLocal` と `RemainingText` を使用。
+
+2. **Capture**
+
+   * Auto-capture、Memory Fallback、Aggressive Fallback、SelectString Extraction/Detail のトグル
+   * Addon Name 入力、Learn names（プレビュー付き）、Probe（テーブル表示）
+   * Slot aliases の編集（保存/クリア）
+     → 既存の操作群をここに集約。
+
+3. **Alarm**
+
+   * リード分の編集、保存、テスト鳴動（最も近い項目で擬似通知）
+     → 既存の “Alarm” ブロックを独立タブ化。
+
+4. **Discord**
+
+   * Enable / Webhook / Earliest only / Use embeds / Test
+   * 説明：429時の再送待機を実装済み（`Retry-After`）
+     → embed 色はコードが対応済み（`0x0066CC`）。 ([Discord][1])
+
+5. **Notion**
+
+   * Enable / Token / DB / Earliest only
+   * プロパティ名（Name/Slot/ETA/Route/Rank/ExtId/Remaining/World/Character/FC）
+   * Test（**即時1件Upsert** に刷新）
+   * 注記：時刻は `Asia/Tokyo` time\_zone で送信。レート制限は 3 req/s 目安。 ([Notion Developers][2])
+
+6. **Advanced**
+
+   * Route Names Editor（Import/Export 追加も検討）、Accept default names in memory
+   * 切り分け用の “SelectString detail extraction” など
+     → 上級者向け設定を隔離。
+
+7. **Debug**
+
+   * Debug logging / Open trace / Self-test / JSON 直読み “Refresh”
+     → 現行の Debug 項目を独立タブ化。
+
+**最小差分コード（概略）**
+
+```csharp
+// DrawUI 内：先頭で
+if (ImGui.BeginTabBar("xsr-tabs")) {
+  if (ImGui.BeginTabItem("Overview")) { DrawOverview(); ImGui.EndTabItem(); }
+  if (ImGui.BeginTabItem("Capture"))  { DrawCapture();  ImGui.EndTabItem(); }
+  if (ImGui.BeginTabItem("Alarm"))    { DrawAlarm();    ImGui.EndTabItem(); }
+  if (ImGui.BeginTabItem("Discord"))  { DrawDiscord();  ImGui.EndTabItem(); }
+  if (ImGui.BeginTabItem("Notion"))   { DrawNotion();   ImGui.EndTabItem(); }
+  if (ImGui.BeginTabItem("Advanced")) { DrawAdvanced(); ImGui.EndTabItem(); }
+  if (ImGui.BeginTabItem("Debug"))    { DrawDebug();    ImGui.EndTabItem(); }
+  ImGui.EndTabBar();
+}
+```
+
+* TabBar/TabItem の使い方は Dear ImGui 既存の慣例に沿います。([GitHub][4], [lemonate.io][5])
+* Dalamud の `UiBuilder`（OpenConfigUi / OpenMainUi）イベントは現状 `OpenConfigUi` 登録済。メインUI起動用に `OpenMainUi` も併用が望ましいです。 ([Dalamud][7])
+
+---
+
+## 4) 安定版リリース前チェックリスト
+
+**A. 使い勝手/表記**
+
+* [ ] 文言の重複削除・日本語の統一（dump 成功/失敗、学習成功/失敗、設定UIなど）。
+* [ ] Snapshot 表に `EtaLocal`/`RemainingText`/`RouteShort` を表示（現在は分のみ）。
+* [ ] Overview に Character/World/FC（取得時のみ）を見出し表示。
+
+**B. 既定値**
+
+* [ ] `DebugLogging=false` に変更（安定版既定）。
+* [ ] 主要フラグの説明文を UI に併記（Aggressive fallback/Memory fallback 等）。
+
+**C. 連携**
+
+* [ ] Discord：429 対応の注記を UI に明記（Retry-After 準拠）。 ([Discord][1])
+* [ ] Notion：JST タイムゾーン指定の注記、3 req/s 目安の注記。 ([Notion Developers][2])
+* [ ] Notion テストは **即時Upsert 1件**に切替（スケジューラ経由を脱却）。
+
+**D. Dalamud**
+
+* [ ] `UiBuilder.OpenMainUi` にも購読（Main/Config 動線の明確化）。([Dalamud][6])
+* [ ] パッケージは `DalamudPackager` の推奨構成を使用（manifest/zip 自動出力）。([GitHub][8], [NuGet][9])
+
+---
+
+## 5) 実装タスク（Codex向け・そのまま貼り付け可）
+
+**T1 — UI タブ化 & 表示刷新**
+
+* `DrawUI()` をタブで分割：`DrawOverview/DrawCapture/DrawAlarm/DrawDiscord/DrawNotion/DrawAdvanced/DrawDebug`。
+* Overview 表に `EtaLocal`・`RemainingText` 追加、Route は短縮表示。
+
+**T2 — 文言整理**
+
+* `Plugin.cs` の重複 `Print` を削除、メッセージを UTF-8 正規化。
+
+**T3 — 既定値調整**
+
+* `Configuration` の `DebugLogging=false` を既定に変更。説明も UI に追記。
+
+**T4 — Notion/Discord テスト動線**
+
+* Notion：`INotionClient` に `UpsertOneAsync(SubmarineSnapshot, SubmarineRecord)`（公開/内部どちらでも可）を追加し、UI の「Test Notion」から**直接**呼び出し。
+* Discord：現行の `NotifySnapshotAsync` をそのまま使用（テスト時は1件限定のサンプルを送信）。
+
+**T5 — Dalamud v9 対応**
+
+* `UiBuilder.OpenMainUi += () => _showUI = true;` を追加。OpenConfigUi は従来通り。([Dalamud][6])
+
+**T6 — 取扱説明（UI内ヘルプ）**
+
+* Discord/Notion セクション下に 429 とタイムゾーンに関する短い注記を追加（“Retry-After 準拠”“JST 固定”）。  ([Discord][1], [Notion Developers][2])
+
+> 参考：これまでの改修サマリ（Notion v2/Identity v3/GCal ソフト無効化/Discord 色付け 等）は **NEXT\_XSR\_PLAN\_v2** にも整理済みです。今回の UI 再設計はその仕上げに相当します。
+
+---
+
+### 補足：確認した代表的なコード断片
+
+* 自動取得と TrySetIdentity の実行順（dump/自動とも）：**TrySetIdentity → Enrich → UpdateSnapshot**。
+* ETA/残り/短縮ルートの生成ロジック（`EtaLocal` / `RemainingText` / `RouteShort`）。
+* Discord の埋め込み色と 429 待機（Retry-After）実装。
+* Notion の `time_zone:"Asia/Tokyo"` 付与と ExtId（安定キー）の付与。
+* UI 構成（各セクション・Test ボタン・GCal 非表示化）。
+
+---
+
+## まとめ
+
+* **タブ化**で操作と表示を分離し、**Overview で“いま必要な情報”を即時に**（ETA の時刻と残りを明示）。
+* **文言の重複/文字化けを解消**して、安定版らしい仕上がりに。
+* \*\*既定値の見直し（Debug OFF）\*\*と **対外連携の注記**（429/JST）で運用のつまずきを予防。
+* Dalamud v9 の **OpenMainUi** に対応して、インストーラからの導線を最適化。
+
+このプランであれば、**コードの差分は UI 分割＋少量のコピー整理が中心**で、既存ロジックや連携の動作は変えずに安定度を上げられます。必要なら、上記 T1〜T6 をそのまま Codex に流せる形で整備します。
+
+[1]: https://discord.com/developers/docs/topics/rate-limits?utm_source=chatgpt.com "Rate Limits | Documentation | Discord Developer Portal"
+[2]: https://developers.notion.com/reference/request-limits?utm_source=chatgpt.com "Request limits"
+[3]: https://developers.notion.com/changelog/time-zone-support?utm_source=chatgpt.com "Time zone support"
+[4]: https://github.com/ocornut/imgui/issues/5342?utm_source=chatgpt.com "Custom tab bar, and button in front of tabs. #5342"
+[5]: https://lemonate.io/docs/en/scripting/reference/imgui.html?utm_source=chatgpt.com "ImGui - Documentation - Lemonate"
+[6]: https://dalamud.dev/versions/v9/?utm_source=chatgpt.com "What's New in Dalamud v9"
+[7]: https://dalamud.dev/api/Dalamud.Interface/Classes/UiBuilder/?utm_source=chatgpt.com "Class UiBuilder"
+[8]: https://github.com/goatcorp/DalamudPackager?utm_source=chatgpt.com "goatcorp/DalamudPackager: MsBuild step to generate ..."
+[9]: https://www.nuget.org/packages/DalamudPackager?utm_source=chatgpt.com "DalamudPackager 13.1.0"

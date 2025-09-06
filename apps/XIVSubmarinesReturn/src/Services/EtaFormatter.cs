@@ -37,7 +37,9 @@ namespace XIVSubmarinesReturn.Services
                         var remain = eta - DateTimeOffset.Now;
                         var mins = Math.Max(0, (int)Math.Round(remain.TotalMinutes));
                         it.Extra["EtaLocal"] = eta.ToString("HH:mm");
-                        it.Extra["RemainingText"] = mins < 60 ? $"{mins}分" : $"{mins / 60}時間{mins % 60}分";
+                        it.Extra["RemainingText"] = mins < 60 ? $"{mins}\u5206" : $"{mins / 60}\u6642\u9593{mins % 60}\u5206";
+                        // (removed duplicate)
+                        // duplicate removed
                     }
 
                     // Route short
@@ -68,4 +70,3 @@ namespace XIVSubmarinesReturn.Services
         }
     }
 }
-

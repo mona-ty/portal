@@ -1,0 +1,24 @@
+dir,top,total_files,md_files,total_size,link_refs,is_mk,is_canon_top
+notes\MK,MK,182,130,22435133,1,yes,no
+notes\MK\.obsidian,MK,38,0,21285437,0,no,yes
+notes\MK\.obsidian\plugins,MK,28,0,19572454,0,no,no
+notes\MK\.obsidian\plugins\calendar,MK,3,0,141996,0,no,no
+notes\MK\.obsidian\plugins\dataview,MK,3,0,1305391,0,no,no
+notes\MK\.obsidian\plugins\obsidian-kanban,MK,3,0,1051917,0,no,no
+notes\MK\.obsidian\plugins\obsidian-tasks-plugin,MK,4,0,801624,0,no,no
+notes\MK\.obsidian\plugins\obsidian-textgenerator-plugin,MK,4,0,15596297,0,no,no
+notes\MK\.obsidian\plugins\quickadd,MK,1,0,1523,0,no,no
+notes\MK\.obsidian\plugins\recent-files-obsidian,MK,4,0,60543,0,no,no
+notes\MK\.obsidian\plugins\table-editor-obsidian,MK,3,0,274565,0,no,no
+notes\MK\.obsidian\plugins\templater-obsidian,MK,3,0,338598,0,no,no
+notes\MK\00_inbox,MK,1,0,1,0,no,yes
+notes\MK\10_research,MK,76,75,708229,0,no,yes
+notes\MK\10_research\Takaaki Umada,MK,1,1,211,0,no,no
+notes\MK\20_notes,MK,11,10,43487,0,no,yes
+notes\MK\30_projects,MK,2,1,1938,0,no,yes
+notes\MK\40_prompts,MK,12,11,48752,0,no,yes
+notes\MK\50_code,MK,29,28,345647,0,no,yes
+notes\MK\60_attachments,MK,3,0,1,0,no,yes
+notes\MK\70_templates,MK,5,5,1521,1,no,yes
+notes\MK\90_archive,MK,1,0,1,0,no,yes
+notes,notes,182,130,0,0,n/a,n/a
