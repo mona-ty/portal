@@ -5,7 +5,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 MK = ROOT / 'notes' / 'MK'
-TASKS = ROOT / 'tasks'
+TASKS = ROOT / 'TASKS'
 OUT_CSV = TASKS / 'mk_classification_proposals.csv'
 
 

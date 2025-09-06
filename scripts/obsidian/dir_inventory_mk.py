@@ -6,7 +6,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 NOTES = ROOT / 'notes'
 MK = NOTES / 'MK'
-ART = ROOT / 'tasks' / 'artifacts'
+ART = ROOT / 'TASKS' / 'artifacts'
 OUT = ART / 'dir_inventory.csv'
 
 CANON = {'00_inbox','10_research','20_notes','30_projects','40_prompts','50_code','60_attachments','70_templates','90_archive','.obsidian'}
@@ -75,4 +75,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-

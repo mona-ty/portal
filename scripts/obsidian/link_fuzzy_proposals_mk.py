@@ -8,10 +8,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 MK = ROOT / 'notes' / 'MK'
-TASKS = ROOT / 'tasks'
+TASKS = ROOT / 'TASKS'
 AUDIT = TASKS / 'mk_link_audit.csv'
-AUDIT_ALT = (ROOT / 'tasks' / 'artifacts' / 'mk_link_audit.csv')
-OUT = TASKS / 'mk_link_fuzzy_proposals.csv'
+AUDIT_ALT = (ROOT / 'TASKS' / 'artifacts' / 'mk_link_audit.csv')
+OUT = TASKS / 'artifacts' / 'mk_link_fuzzy_proposals.csv'
 
 
 def read_text_best_effort(p: Path) -> str:

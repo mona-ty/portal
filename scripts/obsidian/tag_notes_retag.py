@@ -6,7 +6,7 @@ import csv
 
 ROOT = Path(__file__).resolve().parents[1]
 NOTES_DIR = ROOT / 'notes'
-REPORTS_DIR = ROOT / 'reports'
+REPORTS_DIR = ROOT / 'TASKS' / 'artifacts'
 REPORT_CSV = REPORTS_DIR / 'notes_tag_retag.csv'
 
 STOP_TAGS = { 'mk' }

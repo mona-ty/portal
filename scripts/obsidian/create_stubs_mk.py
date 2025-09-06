@@ -7,7 +7,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 MK = ROOT / 'notes' / 'MK'
-TASKS = ROOT / 'tasks'
+TASKS = ROOT / 'TASKS'
 ART = TASKS / 'artifacts'
 AUDIT = TASKS / 'mk_link_audit.csv'
 AUDIT_ALT = ART / 'mk_link_audit.csv'

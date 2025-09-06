@@ -6,7 +6,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 MK = ROOT / 'notes' / 'MK'
-TASKS = ROOT / 'tasks' / 'artifacts'
+TASKS = ROOT / 'TASKS' / 'artifacts'
 OUT = TASKS / 'mk_retag_dry_run.csv'
 
 STOP_TAGS = {'mk'}
@@ -199,4 +199,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-

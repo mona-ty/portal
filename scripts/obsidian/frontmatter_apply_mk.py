@@ -7,7 +7,7 @@ import csv
 
 ROOT = Path(__file__).resolve().parents[1]
 MK = ROOT / 'notes' / 'MK'
-TASKS = ROOT / 'tasks'
+TASKS = ROOT / 'TASKS'
 AUDIT_CSV = TASKS / 'mk_frontmatter_dry_run.csv'
 DIFF_PATH = TASKS / 'mk_frontmatter_apply_dry.diff'
 PLAN_CSV = TASKS / 'mk_frontmatter_apply_plan.csv'

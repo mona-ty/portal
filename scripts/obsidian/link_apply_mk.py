@@ -6,7 +6,7 @@ import csv
 
 ROOT = Path(__file__).resolve().parents[1]
 MK = ROOT / 'notes' / 'MK'
-TASKS = ROOT / 'tasks'
+TASKS = ROOT / 'TASKS'
 AUDIT = TASKS / 'mk_link_audit.csv'
 DIFF_PATH = TASKS / 'mk_link_apply_dry.diff'
 PLAN_CSV = TASKS / 'mk_link_apply_plan.csv'
@@ -90,4 +90,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-

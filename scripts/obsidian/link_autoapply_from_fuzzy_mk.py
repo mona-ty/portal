@@ -6,10 +6,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 MK = ROOT / 'notes' / 'MK'
-TASKS = ROOT / 'tasks'
+TASKS = ROOT / 'TASKS'
 ART = TASKS / 'artifacts'
 FUZZY = ART / 'mk_link_fuzzy_proposals.csv'
-FUZZY_ALT = TASKS / 'mk_link_fuzzy_proposals.csv'
+FUZZY_ALT = TASKS / 'artifacts' / 'mk_link_fuzzy_proposals.csv'
 DIFF = ART / 'mk_link_autoapply_dry.diff'
 PLAN = ART / 'mk_link_autoapply_plan.csv'
 

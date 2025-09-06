@@ -6,7 +6,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 MK = ROOT / 'notes' / 'MK'
-TASKS = ROOT / 'tasks' / 'artifacts'
+TASKS = ROOT / 'TASKS' / 'artifacts'
 OUT = TASKS / 'mk_attachments_dry_run.csv'
 
 
@@ -106,4 +106,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-

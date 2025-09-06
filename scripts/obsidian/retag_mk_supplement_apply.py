@@ -7,7 +7,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 MK = ROOT / 'notes' / 'MK'
-ART = ROOT / 'tasks' / 'artifacts'
+ART = ROOT / 'TASKS' / 'artifacts'
 PLAN_IN = ART / 'mk_retag_supplement_dry_run.csv'
 PLAN_OUT = ART / 'mk_retag_supplement_apply_plan.csv'
 DIFF = ART / 'mk_retag_supplement_apply_dry.diff'
@@ -163,4 +163,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-

@@ -1,265 +1,445 @@
-以下は **安定版リリースに向けた “UI 再整理” の実装計画（Codex 用）** です。
-現状の UI は 1 ウィンドウ内にチェックボックス＋CollapsingHeader で機能を並べ、スナップショット表は `Name / Rank / ETA(min) / Route` の4列のみを表示しています（JSON の `Extra` で生成済みの `EtaLocal` / `RemainingText` / `RouteShort` は未表示）。設定ウィンドウの起動は `UiBuilder.OpenConfigUi` のみを購読しており、**v9 から追加された `OpenMainUi`** は未購読です（→プラグインインストーラの「Open Main UI」ボタンから開けるように対応推奨）。これらは `Plugin.UI.cs` と `Plugin.cs` の現行実装から確認できます。&#x20;
-※ `EtaFormatter` は `EtaLocal / RemainingText / RouteShort` を組み立て済み（“残 / 分 / 時間” を UTF-8 で安定出力）。この前提を表に反映します。
-
-外部仕様の根拠：
-
-* Dalamud v9 の **`UiBuilder.OpenMainUi`**（メイン UI 起動イベント）。([Dalamud][1])
-* ImGui の **TabBar / TabItem** と **Tables**（実装例は demo ソース）。([Skia][2])
-* Notion Date の **`time_zone` は IANA/TZ で、指定時は `start` に UTC オフセットを含めない**。([Notion Developers][3])
-* Discord Webhook の **429 / Retry-After** 後追い（現実装も準拠）。([Discord][4])
+以下は**そのままコピペで Codex に渡す前提**の、実装タスク指示書です。
+目的は「**外部スプレッドシートに依存せず**、\*\*ゲーム内Excel（Lumina経由のシート）**だけで潜水艦セクターを解決し、必要なら**ローカルJSONのエイリアス表（A/B/…）\*\*で“文字⇄通し番号”を補完する」仕組みをプラグインへ追加することです。
+（Dalamud での Excel 取得APIは `IDataManager.GetExcelSheet<T>()`。署名は公式APIに掲載されています。([Dalamud][1])／Excelの実体はFFXIVのEXL/EXH/EXDバイナリで、Luminaのドキュメントとxiv.devで仕様化されています。([Lumina][2], [XIV Dev][3])／Lumina.Excel はゲームバージョンに追随する自動生成定義です。([NuGet][4])）
+**注**：「SubmarineExploration」シートは外部SDKやXIVAPIのシート名でも確認できます。([The Swift Package Index][5])
 
 ---
 
-## 📦 出力物（ファイル）
+## ✅ タスク概要（Codex向けブリーフ）
 
-* `TASKS/NEXT_UI_PLAN_STABLE.md`（この計画書）
-* 変更対象:
-  `apps/XIVSubmarinesReturn/src/Plugin.UI.cs`（UI 再構成） /
-  `apps/XIVSubmarinesReturn/src/Plugin.cs`（OpenMainUi 対応・重複文の整理） /
-  `apps/XIVSubmarinesReturn/src/Configuration.cs`（UI 設定の永続化：自動リフレッシュ等） /
-  `apps/XIVSubmarinesReturn/src/Services/NotionClient.cs`（テスト送信用の薄い公開 API 追加）
-  最新の変更対象一覧とビルド手順は付属メモに準じます。
+**リポジトリ**：既存 Dalamud プラグイン
+**追加機能名**：`SubmarineSectorResolver`
+**要件**：
 
----
+1. `IDataManager`（=Lumina）から**ゲーム内Excelの “SubmarineExploration”** を読み、
+   `SectorId(RowId) / Name(地点名) / Map(海域名)` を列挙・キャッシュする。([Dalamud][1])
+2. 文字エイリアス（A, B, …, AA, AB…）は**ローカルJSON**で補完。JSONが無い/不完全でも**壊れず**に `MapName + PlaceName` を表示できる。
+3. `P18` のような表記は**多義的**なので、次の順で解決:
 
-## ✅ ゴール（DoD）
+   * **(a) 数字部のみ（例: "18"）**→ SectorId=18 を直接引く。
+   * **(b) 文字+数字（例: "P18"）**→ `SectorId=18` を優先解決し、同時に\*\*文字（P）との不一致があれば“参考表示”\*\*に留める。
+   * **(c) 文字のみ（例: "R"）**→ **ローカルJSONの `Map + Alias`** から該当セクター候補を列挙（曖昧なら複数提示）。
+4. スラッシュコマンド `/sv test <code>` を追加。`"P18"` や `"18"` を渡すと、`Map / Alias / SectorId / PlaceName` をチャットに出力。
+5. （任意）設定UIに\*\*「ローカルJSONを再読み込み」「XIVAPIからJSONを再生成（手動）」**ボタンを置く。XIVAPI v2は**スキーマ&パッチを固定して取得安定化\*\*できるが、**ランタイム必須ではない**（押下時のみHTTP）。([xivapi][6])
 
-1. メインウィンドウが **タブ構成**（Overview / Capture / Alarm / Discord / Notion / Advanced / Debug）。
-2. **Overview 表**が `Slot / Name / Rank / ETA(Local) / Remaining / Route(Short)` を表示し、差分強調は現行 `IsChanged` を踏襲。
-3. ウィンドウ上部に **Identity バッジ**（Character / World / FC）＋ **操作列（Refresh・Auto Refresh）**。
-4. Dalamud v9 の **OpenMainUi** でも UI を開ける。([Dalamud][1])
-5. 「Test Notion」「Test Discord」が **即時 1 件送信**できる（スケジューラ経由ではなく直送）
-   ※ Notion は既存 Upsert の流れ・JST `time_zone` 方針を踏襲。 ([Notion Developers][3])
-6. 既存の **Google Calendar セクションはビルドフラグで非表示**（現行維持）。
+**備考**：
 
----
-
-## 🛠️ 実装計画（Codex 実行用）
-
-> **手順:** 下記ブロックを順に `codex exec` してください。
-> 可能な箇所は差分パッチを含めています（言語は C# / ImGui）。
-
-### 1) メイン UI をタブ化（Overview/…）
-
-```bash
-codex exec --full-auto "
-Edit apps/XIVSubmarinesReturn/src/Plugin.UI.cs:
-- DrawUI() 内の CollapsingHeader 群を TabBar 構成に移行:
-  ImGui.BeginTabBar(\"xsr_tabs\"); 
-   - Overview: 既存の Snapshot テーブル＋上部ヘッダ（後述）を配置
-   - Capture: 'Learn names from UI' / 'Capture (UI)' / 'Capture (Memory)' / 'Probe addons' / 'Open folder'
-   - Alarm: 現行 Alarm 設定（Lead minutes 入力と保存）
-   - Discord: 現行 Discord 設定 + 'Test Discord'
-   - Notion: 現行 Notion 設定 + 'Test Notion'
-   - Advanced: Route Names エディタ
-   - Debug: Debug ログ/ Self-test / Trace
-  ImGui.EndTabBar();
-- 既存 CollapsingHeader は削除または各 Tab へ移動。
-"
-```
-
-参考: ImGui の TabBar/TabItem は demo 実装の流れに準拠します。([Skia][2])
-現状の UI 要素はすべて `Plugin.UI.cs` に集約済みです。
-
-### 2) Overview 表の列を拡張（Extra 利用）
-
-```bash
-codex exec --patch apps/XIVSubmarinesReturn/src/Plugin.UI.cs <<'PATCH'
-*** Begin Patch
-*** Update File: apps/XIVSubmarinesReturn/src/Plugin.UI.cs
-@@
--            if (ImGui.BeginTable("subs", 4, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg))
-+            if (ImGui.BeginTable("subs", 6, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg))
-             {
--                ImGui.TableSetupColumn("Name");
--                ImGui.TableSetupColumn("Rank");
--                ImGui.TableSetupColumn("ETA(min)");
--                ImGui.TableSetupColumn("Route");
-+                ImGui.TableSetupColumn("Slot");
-+                ImGui.TableSetupColumn("Name");
-+                ImGui.TableSetupColumn("Rank");
-+                ImGui.TableSetupColumn("ETA(Local)");
-+                ImGui.TableSetupColumn("Remaining");
-+                ImGui.TableSetupColumn("Route");
-                 ImGui.TableHeadersRow();
- 
-                 foreach (var it in _uiSnapshot.Items)
-                 {
-                     bool changed = IsChanged(it);
-                     ImGui.TableNextRow();
--                    ImGui.TableSetColumnIndex(0);
--                    if (changed) { ImGui.Text($"* {it.Name}"); }
--                    else ImGui.Text(it.Name ?? string.Empty);
--                    ImGui.TableSetColumnIndex(1);
--                    ImGui.Text(it.Rank?.ToString() ?? "");
--                    ImGui.TableSetColumnIndex(2);
--                    ImGui.Text(it.DurationMinutes?.ToString() ?? "");
--                    ImGui.TableSetColumnIndex(3);
--                    ImGui.Text(it.RouteKey ?? "");
-+                    ImGui.TableSetColumnIndex(0);
-+                    ImGui.Text(it.Slot?.ToString() ?? "");
-+                    ImGui.TableSetColumnIndex(1);
-+                    ImGui.Text(changed ? $"* {it.Name}" : (it.Name ?? string.Empty));
-+                    ImGui.TableSetColumnIndex(2);
-+                    ImGui.Text(it.Rank?.ToString() ?? "");
-+                    ImGui.TableSetColumnIndex(3);
-+                    var etaLocal = it.Extra != null && it.Extra.TryGetValue("EtaLocal", out var t) ? t : "";
-+                    ImGui.Text(etaLocal);
-+                    ImGui.TableSetColumnIndex(4);
-+                    var remain = it.Extra != null && it.Extra.TryGetValue("RemainingText", out var r) ? r : "";
-+                    ImGui.Text(remain);
-+                    ImGui.TableSetColumnIndex(5);
-+                    var route = it.Extra != null && it.Extra.TryGetValue("RouteShort", out var rs) ? rs : (it.RouteKey ?? "");
-+                    ImGui.Text(route);
-                 }
- 
-                 ImGui.EndTable();
-             }
-*** End Patch
-PATCH
-```
-
-上記は `EtaFormatter` が付与する `Extra["EtaLocal"/"RemainingText"/"RouteShort"]` を利用します。
-
-### 3) ヘッダ（Identity & 操作列）＋自動リフレッシュ
-
-```bash
-codex exec --full-auto "
-Edit apps/XIVSubmarinesReturn/src/Configuration.cs:
-- Add bool UiAutoRefresh = true; int UiRefreshSeconds = 5; を追加して Save 対象にする.
-
-Edit apps/XIVSubmarinesReturn/src/Plugin.UI.cs:
-- DrawUI() 冒頭に Identity バッジを表示:
-  （_uiSnapshot?.Character / World / FreeCompany を1行表示）
-- 'Refresh' ボタン右に 'Auto refresh' チェック + 秒数入力(1..30) を配置し、
-  DrawSnapshotTable() の 5秒 固定を Config.UiRefreshSeconds に置換、
-  Auto ON のときは 'Refresh' 押下不要で周期再読込。
-"
-```
-
-Identity は現行 `TrySetIdentity()` で埋め込まれます（Snapshot.Character / World / FreeCompany）。
-
-### 4) `OpenMainUi` を購読（Installer から開けるように）
-
-```bash
-codex exec --patch apps/XIVSubmarinesReturn/src/Plugin.UI.cs <<'PATCH'
-*** Begin Patch
-*** Update File: apps/XIVSubmarinesReturn/src/Plugin.UI.cs
-@@
-     private void InitUI()
-     {
-         try
-         {
-             _pi.UiBuilder.Draw += DrawUI;
--            _pi.UiBuilder.OpenConfigUi += () => _showUI = true;
-+            _pi.UiBuilder.OpenConfigUi += () => _showUI = true;
-+            _pi.UiBuilder.OpenMainUi  += () => _showUI = true;
-         }
-         catch { }
-     }
-*** End Patch
-PATCH
-```
-
-Dalamud v9 で `OpenMainUi` が追加されています。([Dalamud][1])
-
-### 5) 「Test Notion」を直送に変更（1件 Upsert）
-
-```bash
-codex exec --full-auto "
-Edit apps/XIVSubmarinesReturn/src/Services/NotionClient.cs:
-- public Task UpsertNearestAsync(SubmarineSnapshot snap, CancellationToken ct=default)
-  を INotionClient に追加し、内部で 'nearest 1件' に絞って UpsertSnapshotAsync と同等処理。
-
-Edit apps/XIVSubmarinesReturn/src/Plugin.UI.cs:
-- Notion タブの 'Test Notion' ボタン: 
-  _notion?.UpsertNearestAsync(snap).GetAwaiter().GetResult(); に差し替え
-  （現状は AlarmScheduler 経由で enqueue しているため、テストのフィードバックが遅い）
-"
-```
-
-Notion 側の方針（JST `time_zone` を指定、`start` に UTC オフセットを含めない）は現行実装のまま維持します。 ([Notion Developers][3])
-
-### 6) 「Test Discord」の文面を Overview と合わせる
-
-```bash
-codex exec --full-auto "
-Edit apps/XIVSubmarinesReturn/src/Plugin.UI.cs:
-- 'Test Discord' のサンプル Snapshot を、Extra を含めて Enrich 済みの1件に統一。
-- 既定は embeds を用い、description は 'Earliest only (ETA min)' を現行と揃える。
-"
-```
-
-Webhook のリトライは `Retry-After` に従う現行実装で問題ありません。 ([Discord][4])
-
-### 7) 重複メッセージの整理（小修正）
-
-```bash
-codex exec --patch apps/XIVSubmarinesReturn/src/Plugin.cs <<'PATCH'
-*** Begin Patch
-*** Update File: apps/XIVSubmarinesReturn/src/Plugin.cs
-@@
--            _chat.Print("[Submarines] 設定ウィンドウを開きました。");
--            _chat.Print("[Submarines] 設定ウィンドウを開きました。");
-+            _chat.Print("[Submarines] 設定ウィンドウを開きました。");
-@@
--            _chat.Print("[Submarines] メモリからの取得に失敗しました。工房に入ってから再試行してください。");
--            _chat.Print("[Submarines] メモリからの取得に失敗しました。工房に移動して再実行してください。");
-+            _chat.Print("[Submarines] メモリからの取得に失敗しました。工房に入ってから再試行してください。");
-@@
--            _chat.Print("[Submarines] 選択UI(SelectString) を開いた状態で実行してください。");
--            _chat.Print("[Submarines] SelectString を開いた状態で実行してください。");
-+            _chat.Print("[Submarines] SelectString を開いた状態で実行してください。");
-*** End Patch
-PATCH
-```
-
-（重複出力は現行ソースに点在。上記は代表例です。）
-
-### 8) 表の操作性（列幅 / ツールチップ）
-
-```bash
-codex exec --full-auto "
-Edit apps/XIVSubmarinesReturn/src/Plugin.UI.cs:
-- Overview 表の Route セルにホバー時ツールチップで 'RouteKey' をフル表示。
-- Name 列は '*' 強調のまま、ImGui.TextWrapped を使わず通常表示を維持。
-- 将来のレイアウト調整用に ImGuiTableFlags.SizingStretchProp を付与（必要なら）。
-"
-```
-
-（Tab 周りは demo の実装順に則って呼び出します。）([Skia][2])
+* 例として **Concealed Bay は Deep‑sea Site(溺没海) の Alias=R**。([FFXIV Wiki][7], [Gamer Escape][8])
+* コミュニティ資料では **“Sector 18 | R – Concealed Bay”** の併記も確認できる（外部資料は“参考”扱い）。([Eorzea World][9])
+* Mogshipの計算機UIも `R = Concealed Bay, S = Deep‑sea Site 5, T = Purgatory …` の並びを表示している（参考）。([Mogship][10])
 
 ---
 
-## 🧪 手動確認（抜粋）
+## 📁 追加/変更ファイル一覧
 
-* **Open Main UI** ボタンからメイン UI が開く（Installer / Plugin 設定画面）。([Dalamud][5])
-* **Overview 表**に `ETA(Local)/Remaining/Route(Short)` が表示される（`/xsr dump` 後に確認）。
-* **Test Notion** が 1 アイテムを即時 Upsert（JST 表示）。 ([Notion Developers][3])
-* **Test Discord** が 1 投稿（embed or text）で送信、429 が出ても自動リトライ。 ([Discord][4])
-* **GCAL セクション非表示**は現行維持（`#if XSR_FEAT_GCAL`）。
-
----
-
-## ℹ️ 備考（現行コード前提）
-
-* Notion/Discord/Alarm の土台は既に実装済みです（変更ファイル一覧・ガイド参照）。
-* `EtaFormatter` は UTF-8 の “時間/分” で `RemainingText` を生成（UI はそのまま表示）。
-* Webhook の 429 は `Retry-After` を見て 1 回リトライが入っています（実装踏襲）。 ([Discord][4])
+```
+/Core/Sectors/SectorModels.cs
+/Core/Sectors/AliasIndex.cs
+/Core/Sectors/AliasIndex.json              // ローカル同梱の種データ（下にサンプルあり）
+/Core/Sectors/SectorResolver.cs
+/Commands/SectorCommands.cs
+/UI/SectorDebugWindow.cs                    // 任意（簡易UI）
+```
 
 ---
 
-### （任意）小さな非 UI 改善（別チケット推奨）
+## 🧩 実装詳細
 
-* **Alarm Trigger の同一分判定**（`mins == lead` だと取りこぼしの恐れ。前回値保持で交差検出へ）。現行実装の位置：`AlarmScheduler.Tick`。
+### 0) 参照と名前空間（重要）
+
+* 生成シート型の名前空間は環境で異なることがあるため、**新Lumina(7.x)の `Lumina.Excel.Sheets` を優先**、ビルドエラー時は **`Lumina.Excel.GeneratedSheets` に切替**。
+  （例で**エイリアス using**を用意）
+
+```csharp
+// SectorModels.cs の先頭あたり
+using Dalamud.Plugin.Services;
+using Lumina.Excel; // 型は IDataManager.GetExcelSheet<T>() で返る ExcelSheet<T> を利用。:contentReference[oaicite:9]{index=9}
+
+// 生成シートの名前空間は環境差があるため二択を用意（どちらか片方だけ有効にする）
+#if USE_LUMINA_SHEETS_NS
+using SubmarineExplorationRow = Lumina.Excel.Sheets.SubmarineExploration;   // 新系
+#else
+using SubmarineExplorationRow = Lumina.Excel.GeneratedSheets.SubmarineExploration; // 旧系
+#endif
+```
+
+> 参照根拠：`IDataManager.GetExcelSheet<T>` の署名/説明（Dalamud公式API）、LuminaのExcel仕様。([Dalamud][1], [Lumina][11])
 
 ---
 
-以上の手順で、**UI をタブで整理**し、**Overview に人間が読みやすい ETA/残り/短縮ルート**を反映、**OpenMainUi 対応**まで含めて安定リリースに適した形に整えます。必要であれば、この計画ブロックをそのまま Codex に投入して進めてください。
+### 1) モデル
 
-[1]: https://dalamud.dev/api/Dalamud.Interface/Interfaces/IUiBuilder/?utm_source=chatgpt.com "Interface IUiBuilder"
-[2]: https://skia.googlesource.com/external/github.com/ocornut/imgui/%2B/refs/tags/v1.78/imgui_demo.cpp?utm_source=chatgpt.com "imgui_demo.cpp - external/github.com/ocornut/imgui - Git ..."
-[3]: https://developers.notion.com/changelog/time-zone-support?utm_source=chatgpt.com "Time zone support"
-[4]: https://discord.com/developers/docs/topics/rate-limits?utm_source=chatgpt.com "Rate Limits | Documentation | Discord Developer Portal"
-[5]: https://dalamud.dev/versions/v9/?utm_source=chatgpt.com "What's New in Dalamud v9"
+```csharp
+// Core/Sectors/SectorModels.cs
+namespace Plugin.Core.Sectors;
+
+public sealed class SectorEntry {
+    public uint SectorId { get; init; }          // Excel RowId = セクター通し番号（XIVAPIの概念でもRowIdが主キー）:contentReference[oaicite:11]{index=11}
+    public string PlaceName { get; init; } = ""; // 地点表示名（例: "Concealed Bay"）
+    public string MapName { get; init; } = "";   // 海域（例: "Deep-sea Site"）
+    public string? Alias { get; set; }           // 文字エイリアス（A..Z, AA..）
+}
+
+public sealed class ResolveResult {
+    public SectorEntry? Match { get; init; }
+    public bool Ambiguous { get; init; }
+    public IReadOnlyList<SectorEntry>? Candidates { get; init; }
+    public string? Note { get; init; } // 例: "入力の 'P' と実エイリアス 'R' が不一致"
+}
+```
+
+---
+
+### 2) ローカルJSONのエイリアス表（読み書き）
+
+```csharp
+// Core/Sectors/AliasIndex.cs
+using System.Text.Json;
+
+namespace Plugin.Core.Sectors;
+
+public sealed class AliasIndex {
+    // MapName -> (Alias -> SectorId)
+    public Dictionary<string, Dictionary<string, uint>> MapAliasToSector { get; init; } = new(StringComparer.OrdinalIgnoreCase);
+
+    public static AliasIndex LoadOrDefault(string jsonPath) {
+        if (File.Exists(jsonPath)) {
+            var json = File.ReadAllText(jsonPath);
+            var data = JsonSerializer.Deserialize<AliasIndex>(json) ?? new AliasIndex();
+            Normalise(data);
+            return data;
+        }
+        var d = new AliasIndex();
+        Normalise(d);
+        return d;
+    }
+
+    public void Save(string jsonPath) {
+        var json = JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true });
+        File.WriteAllText(jsonPath, json);
+    }
+
+    private static void Normalise(AliasIndex d) {
+        foreach (var (map, table) in d.MapAliasToSector.ToArray()) {
+            d.MapAliasToSector[map] = new Dictionary<string, uint>(table, StringComparer.OrdinalIgnoreCase);
+        }
+    }
+}
+```
+
+**`AliasIndex.json` の“種データ”サンプル**（**最低限**：溺没海の A..AD の並びだけ入れておく。*A=1…Z=26, AA=27, AB=28, AC=29, AD=30*）
+※これは**人力で作ってよい**／**後述のUI/ボタンで更新**。Mogship/GE/CGWで裏取り可能（参考）。([Mogship][10], [Gamer Escape][12], [Console Games Wiki][13])
+
+```json
+{
+  "MapAliasToSector": {
+    "Deep-sea Site": {
+      "A": 1, "B": 2, "C": 3, "D": 4, "E": 5, "F": 6, "G": 7, "H": 8, "I": 9, "J": 10,
+      "K": 11, "L": 12, "M": 13, "N": 14, "O": 15, "P": 16, "Q": 17, "R": 18, "S": 19, "T": 20,
+      "U": 21, "V": 22, "W": 23, "X": 24, "Y": 25, "Z": 26,
+      "AA": 27, "AB": 28, "AC": 29, "AD": 30
+    }
+  }
+}
+```
+
+> 参考：**Concealed Bay = Alias R / Map Deep‑sea Site**。R→18 の整合は外部資料でも目視確認できる（参考）。([FFXIV Wiki][7], [Eorzea World][9])
+
+---
+
+### 3) Excel からのインデックス作成（唯一のソース）
+
+```csharp
+// Core/Sectors/SectorResolver.cs
+using Dalamud.Plugin.Services;
+using Lumina.Excel;
+using System.Text.RegularExpressions;
+
+namespace Plugin.Core.Sectors;
+
+public sealed class SectorResolver {
+    private readonly Dictionary<uint, SectorEntry> byId = new();
+    private readonly Dictionary<(string map, uint id), SectorEntry> byMapAndId = new();
+    private readonly Dictionary<(string map, string alias), SectorEntry> byAlias = new();
+    private readonly AliasIndex aliasIndex;
+    private static readonly Regex CodeRx = new(@"^(?<letters>[A-Z]{1,2})?(?<digits>\d+)?$", RegexOptions.Compiled);
+
+    public SectorResolver(IDataManager data, AliasIndex aliasIndex) {
+        this.aliasIndex = aliasIndex;
+
+        // Excel から SubmarineExploration を列挙
+        var sheet = data.GetExcelSheet<SubmarineExplorationRow>(); // Excelの取得API。:contentReference[oaicite:14]{index=14}
+        foreach (var row in sheet) {
+            var id = row.RowId;                       // RowId は各シートの主キー（XIVAPIの概念とも一致）。:contentReference[oaicite:15]{index=15}
+            var name = row.Name?.ToString() ?? "";    // 生成型の列名は環境差あり。Name/PlaceName 等いずれかで取得
+            var map  = GetMapName(row);               // 下の補助関数でマップ名を取り出す
+            var entry = new SectorEntry { SectorId = id, PlaceName = name, MapName = map };
+            byId[id] = entry;
+            byMapAndId[(map, id)] = entry;
+        }
+
+        // JSON の Alias を紐付け（任意/存在する分だけ）
+        foreach (var (map, table) in aliasIndex.MapAliasToSector) {
+            foreach (var (alias, sectorId) in table) {
+                if (byMapAndId.TryGetValue((map, sectorId), out var e)) {
+                    e.Alias = alias.ToUpperInvariant();
+                    byAlias[(map, e.Alias)] = e;
+                }
+            }
+        }
+    }
+
+    public SectorEntry? FromSectorId(uint id) => byId.GetValueOrDefault(id);
+
+    public SectorEntry? FromAlias(string map, string alias) =>
+        byAlias.TryGetValue((map, alias.ToUpperInvariant()), out var e) ? e : null;
+
+    /// <summary> "P18" / "18" / "R" を解決。曖昧時は Candidates を返す。 </summary>
+    public ResolveResult ResolveCode(string code, string? mapHint = null) {
+        var m = CodeRx.Match(code.Trim().ToUpperInvariant());
+        if (!m.Success) return new ResolveResult { Ambiguous = true, Note = "コード形式不正" };
+
+        var letters = m.Groups["letters"].Success ? m.Groups["letters"].Value : null;
+        var digitsStr = m.Groups["digits"].Success ? m.Groups["digits"].Value : null;
+
+        // (1) digits を最優先（"18" or "P18" の "18"）
+        if (uint.TryParse(digitsStr, out var id)) {
+            var byIdHit = FromSectorId(id);
+            if (byIdHit != null) {
+                // 文字が与えられていて不一致なら注記
+                string? note = null;
+                if (!string.IsNullOrEmpty(letters) && !string.Equals(byIdHit.Alias, letters, StringComparison.OrdinalIgnoreCase)) {
+                    note = $"入力の別名 '{letters}' と実データの別名 '{byIdHit.Alias ?? "未定義"}' が不一致";
+                }
+                return new ResolveResult { Match = byIdHit, Note = note };
+            }
+        }
+
+        // (2) letters のみで解決（Mapヒントが無ければ全Mapを走査）
+        if (!string.IsNullOrEmpty(letters)) {
+            if (!string.IsNullOrEmpty(mapHint)) {
+                var byAliasHit = FromAlias(mapHint, letters);
+                if (byAliasHit != null) return new ResolveResult { Match = byAliasHit };
+                return new ResolveResult { Ambiguous = true, Note = $"'{mapHint}' に別名 {letters} は見つかりません" };
+            }
+            // 全Map探索（複数候補を返す）
+            var cands = byId.Values.Where(e => string.Equals(e.Alias, letters, StringComparison.OrdinalIgnoreCase)).ToList();
+            return cands.Count == 1
+                ? new ResolveResult { Match = cands[0] }
+                : new ResolveResult { Ambiguous = true, Candidates = cands, Note = "複数の海域で同じ別名が見つかりました" };
+        }
+
+        // (3) どちらも無ければ曖昧
+        return new ResolveResult { Ambiguous = true, Note = "解決に必要な情報が不足" };
+    }
+
+    private static string GetMapName(SubmarineExplorationRow row) {
+        // 生成型の列名は環境差があるため、候補を順に試す
+        // 例: row.Map?.Value?.Name?.ToString() / row.Map?.ToString() / row.PlaceName* 系
+        var map = row.GetType().GetProperty("Map")?.GetValue(row);
+        if (map != null) {
+            // LazyRow<PlaceName> の可能性を考慮
+            var valProp = map.GetType().GetProperty("Value");
+            var value = valProp?.GetValue(map);
+            var nameProp = value?.GetType().GetProperty("Name");
+            var name = nameProp?.GetValue(value)?.ToString();
+            if (!string.IsNullOrEmpty(name)) return name!;
+        }
+        // フォールバック（無名）
+        return "Unknown Map";
+    }
+}
+```
+
+---
+
+### 4) スラッシュコマンド
+
+```csharp
+// Commands/SectorCommands.cs
+using Dalamud.Game.Command;
+using Dalamud.Plugin;
+using Dalamud.Plugin.Services;
+using Plugin.Core.Sectors;
+
+namespace Plugin.Commands;
+
+public sealed class SectorCommands : IDisposable {
+    private readonly IDalamudPluginInterface pi;
+    private readonly ICommandManager cmds;
+    private readonly SectorResolver resolver;
+
+    private const string Cmd = "/sv";
+
+    public SectorCommands(IDalamudPluginInterface pi, ICommandManager cmds, SectorResolver resolver) {
+        this.pi = pi; this.cmds = cmds; this.resolver = resolver;
+        cmds.AddHandler(Cmd, new CommandInfo(OnCmd) {
+            HelpMessage = "/sv test <code> 例: /sv test P18"
+        });
+    }
+
+    public void Dispose() => cmds.RemoveHandler(Cmd);
+
+    private void OnCmd(string cmd, string args) {
+        var parts = args.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length >= 2 && parts[0].Equals("test", StringComparison.OrdinalIgnoreCase)) {
+            var code = parts[1];
+            var res = resolver.ResolveCode(code);
+            if (res.Match != null) {
+                var m = res.Match;
+                Chat($"[{code}] => Map={m.MapName}, Alias={m.Alias ?? "-"}, SectorId={m.SectorId}, Name={m.PlaceName}{(string.IsNullOrEmpty(res.Note) ? "" : $" ({res.Note})")}");
+            } else if (res.Ambiguous && res.Candidates is { Count: >0 }) {
+                Chat($"[{code}] は曖昧。候補: " + string.Join(" | ", res.Candidates.Select(c => $"{c.MapName}:{c.Alias}/{c.SectorId}:{c.PlaceName}")));
+            } else {
+                Chat($"[{code}] は解決できませんでした。{res.Note}");
+            }
+            return;
+        }
+        Chat("使い方: /sv test <code> 例: /sv test P18");
+    }
+
+    private void Chat(string msg) => pi.UiBuilder.AddNotification(msg, "SubmarineSectorResolver", Dalamud.Interface.Internal.Notifications.NotificationType.Info);
+}
+```
+
+---
+
+### 5) 簡易UI（任意）
+
+```csharp
+// UI/SectorDebugWindow.cs
+using Dalamud.Interface.Windowing;
+using ImGuiNET;
+using Plugin.Core.Sectors;
+
+namespace Plugin.UI;
+
+public sealed class SectorDebugWindow : Window {
+    private readonly SectorResolver resolver;
+    private string input = "P18";
+
+    public SectorDebugWindow(SectorResolver resolver) : base("Sector Debug") {
+        this.resolver = resolver;
+        Size = new System.Numerics.Vector2(420, 240);
+        SizeCondition = ImGuiCond.FirstUseEver;
+    }
+
+    public override void Draw() {
+        ImGui.InputText("Code", ref input, 32);
+        if (ImGui.Button("Resolve")) {
+            var r = resolver.ResolveCode(input);
+            if (r.Match != null) {
+                var m = r.Match;
+                ImGui.TextWrapped($"Map={m.MapName}, Alias={m.Alias ?? "-"}, SectorId={m.SectorId}, Name={m.PlaceName}");
+                if (!string.IsNullOrEmpty(r.Note)) ImGui.TextColored(new(1, .8f, .2f, 1), r.Note);
+            } else if (r.Ambiguous && r.Candidates is { Count: > 0 }) {
+                ImGui.Text("Ambiguous:");
+                foreach (var c in r.Candidates) ImGui.BulletText($"{c.MapName}:{c.Alias}/{c.SectorId}:{c.PlaceName}");
+            } else ImGui.TextColored(new(1, .4f, .4f, 1), r.Note ?? "Failed");
+        }
+    }
+}
+```
+
+---
+
+### 6) 既存 `Plugin.cs` への組み込み（概略）
+
+```csharp
+// Plugin.cs（概略）
+using Dalamud.Plugin;
+using Dalamud.Plugin.Services;
+using Plugin.Commands;
+using Plugin.Core.Sectors;
+using Plugin.UI;
+
+public sealed class Plugin : IDalamudPlugin {
+    public string Name => "YourPlugin";
+
+    public Plugin(
+        IDalamudPluginInterface pi,
+        IDataManager data,
+        ICommandManager cmds
+    ) {
+        var aliasPath = Path.Combine(pi.ConfigDirectory.FullName, "AliasIndex.json");
+        var aliasIndex = AliasIndex.LoadOrDefault(aliasPath);
+        var resolver = new SectorResolver(data, aliasIndex);
+
+        // Commands
+        _commands = new SectorCommands(pi, cmds, resolver);
+
+        // （任意）UI
+        _window = new SectorDebugWindow(resolver);
+        pi.UiBuilder.Draw += _window.Draw;
+    }
+
+    private readonly SectorCommands _commands;
+    private readonly SectorDebugWindow _window;
+
+    public void Dispose() { /* … */ }
+}
+```
+
+---
+
+## 🔁 任意：ローカルJSONの更新ボタン（XIVAPI v2）
+
+* 設定UIに「**エイリアスJSON再生成**」ボタンを設置し、押された時だけ `HttpClient` で XIVAPI v2 を叩いて `SubmarineExploration` を取得 → `RowId / Map / Name` を読んで**人力で付けた Alias を検証 or 追記**するユーティリティを実装しても良いです。
+* XIVAPI v2 は**スキーマ／パッチのピン固定**に対応するため、\*\*常用ではなく“押した時だけ”\*\*でも十分安全に更新できます（“安定性・ピン固定”は公式Docに明記）。([xivapi][6])
+* なお、**ランタイム依存にしない**（ボタンを押さない限りネットワーク未使用）設計にしてください。
+
+---
+
+## 🧪 受け入れ基準（Acceptance Criteria）
+
+1. `/sv test 18` → `SectorId=18` の行が解決され、`MapName=Deep‑sea Site, Alias=R（JSONがある場合）, PlaceName=Concealed Bay` 等が表示される。
+   （**参考**：Concealed Bay = Alias R / Map Deep‑sea Site。([FFXIV Wiki][7])）
+2. `/sv test P18` → `SectorId=18` が見つかる。入力の `P` と実エイリアス `R` が不一致なら**注記**が付く。
+3. `/sv test R` → **Deep‑sea Site の R(=18)** がヒットする（JSONに前掲のサンプルを入れている前提）。
+4. `AliasIndex.json` を削除しても、**少なくとも `MapName + PlaceName` の表示は成功**し、落ちない。
+5. （任意）設定UIの「再読み込み」で JSON を再読込できる。
+6. （任意）「JSON再生成」ボタンは押下時のみHTTPアクセスし、**押さない限り完全オフライン**。
+
+---
+
+## 📚 参考根拠（実装判断に関わる要点）
+
+* **Dalamud API**：`IDataManager.GetExcelSheet<T>()` でゲーム内シートにアクセス（署名/解説）。([Dalamud][1])
+* **Lumina**：ゲームファイルからExcel（EXD/EXH）を読むライブラリ。基本/Excelの詳細は公式Docsに記載。([Lumina][2])
+* **Excel（EXL/EXH/EXD）仕様**：xiv.dev の説明。([XIV Dev][3])
+* **`SubmarineExploration` シート名**：外部SDK（xivapi-swift）のシート一覧に存在。([The Swift Package Index][5])
+* **RowId が主キー**：XIVAPI v2 の「Important Concepts」。([xivapi][14])
+* **コミュニティ裏取り**（表示上のAlias/Mapの組）
+
+  * GamerEscape/ConsoleGamesWiki：例「Concealed Bay = Alias R / Map Deep‑sea Site」。([Gamer Escape][8], [FFXIV Wiki][7])
+  * Mogship（Trip Plannerのラベル）：R=Concealed Bay, S=Deep‑sea Site 5, T=Purgatory …。([Mogship][10])
+* **XIVAPI v2**（安定化・ピン固定・全シートアクセス）：公式ドキュメント。([xivapi][6])
+* **Lumina.Excel の自動生成定義はゲームバージョンに追随**：NuGet 説明。([NuGet][4])
+
+---
+
+### メモ（Codex実装上の注意）
+
+* `SubmarineExplorationRow` の列名はビルド環境で若干差があります（`Name` / `PlaceName` / `Map` など）。上の `GetMapName` では**反射**で可能な限り拾うフォールバックを入れています。
+* JSON のエイリアスは**後から人力で足してもOK**。**無くても動く**設計が主眼です。
+* 外部サイトの対応表は「**目視検証の参考**」。\*\*プラグインのソース・オブ・トゥルースは常に Excel（=ゲーム内データ）\*\*です。
+
+以上。
+
+[1]: https://dalamud.dev/api/Dalamud.Plugin.Services/Interfaces/IDataManager/ "Interface IDataManager | Dalamud"
+[2]: https://lumina.xiv.dev/docs/guides/basic-usage.html "Setup & Basic Usage "
+[3]: https://xiv.dev/game-data/file-formats/excel "Excel | XIV Dev Wiki"
+[4]: https://www.nuget.org/packages/Lumina.Excel "
+        NuGet Gallery
+        \| Lumina.Excel 7.3.1
+    "
+[5]: https://swiftpackageindex.com/eisenhuth/xivapi-swift/v0.9.0/documentation/xivapi_swift/sheets/submarineexploration "xivapi-swift Documentation – Swift Package Index"
+[6]: https://v2.xivapi.com/docs/welcome/ "Welcome | xivapi"
+[7]: https://ffxiv.consolegameswiki.com/wiki/Concealed_Bay?utm_source=chatgpt.com "Concealed Bay - Final Fantasy XIV Online Wiki"
+[8]: https://ffxiv.gamerescape.com/wiki/Concealed_Bay?utm_source=chatgpt.com "Concealed Bay - Gamer Escape's Final Fantasy XIV ..."
+[9]: https://eorzeaworld.com/en/freecompany?utm_source=chatgpt.com "Eorzea World: Free Company"
+[10]: https://www.mogship.com/submarines/calculator?utm_source=chatgpt.com "Trip planner"
+[11]: https://lumina.xiv.dev/docs/guides/excel.html?utm_source=chatgpt.com "Advanced Excel"
+[12]: https://ffxiv.gamerescape.com/wiki/Category%3ASubaquatic_Deployment_Sector "Category:Subaquatic Deployment Sector - Gamer Escape's Final Fantasy XIV (FFXIV, FF14) wiki"
+[13]: https://consolegameswiki.com/wiki/Category%3ASubaquatic_Deployment_Sector "Category:Subaquatic Deployment Sector - Final Fantasy XIV Online Wiki - FFXIV / FF14 Online Community Wiki and Guide"
+[14]: https://v2.xivapi.com/docs/guides/concepts/ "Important Concepts | xivapi"
