@@ -1,0 +1,15 @@
+{
+  "Author": "Mona Tierra",
+  "Name": "XIV Submarines Return",
+  "InternalName": "XIVSubmarinesReturn",
+  "Punchline": "Submarine list -> JSON bridge for ACT/CLI integration.",
+  "Description": "Captures company workshop submarine list and writes JSON for external tools.",
+  "ApplicableVersion": "any",
+  "DalamudApiLevel": 13,
+  "Tags": ["submarine", "workshop", "utilities"],
+  "RepoUrl": "",
+  "IconUrl": "icon.png",
+  "ImageUrls": ["icon.png"],
+  "Changelog": "Initial scaffold",
+  "AssemblyVersion": "0.1.1"
+}
