@@ -16,6 +16,7 @@ namespace XIVSubmarinesReturn.Services
     {
         private readonly Configuration _cfg;
         private readonly Dalamud.Plugin.Services.IChatGui _chat;
+        private readonly Dalamud.Plugin.Services.IToastGui _toast;
         private readonly Dalamud.Plugin.Services.IPluginLog _log;
         private readonly IDiscordNotifier _discord;
 #if XSR_FEAT_GCAL
@@ -30,6 +31,7 @@ namespace XIVSubmarinesReturn.Services
 
         public AlarmScheduler(Configuration cfg,
             Dalamud.Plugin.Services.IChatGui chat,
+            Dalamud.Plugin.Services.IToastGui toast,
             Dalamud.Plugin.Services.IPluginLog log,
             IDiscordNotifier discord,
 #if XSR_FEAT_GCAL
@@ -37,7 +39,7 @@ namespace XIVSubmarinesReturn.Services
 #endif
             INotionClient? notion = null)
         {
-            _cfg = cfg; _chat = chat; _log = log; _discord = discord;
+            _cfg = cfg; _chat = chat; _toast = toast; _log = log; _discord = discord;
 #if XSR_FEAT_GCAL
             _gcal = gcal;
 #endif
@@ -119,12 +121,14 @@ var hadPrev = _prevMins.TryGetValue(idKey, out var prevMins);
                             var key = $"{it.Slot ?? 0}-{it.EtaUnix ?? 0}-{lead}";
                             if (_fired.Add(key))
                             {
-                                // in-game chat
+                                // in-game chat + toast(SE)
                                 try
                                 {
                                     var etaLoc = it.Extra != null && it.Extra.TryGetValue("EtaLocal", out var t) ? t : eta.ToLocalTime().ToString("HH:mm");
                                     var rt = it.Extra != null && it.Extra.TryGetValue("RouteShort", out var r) ? r : it.RouteKey;
-                                    _chat.Print($"[Sub] {(it.Slot.HasValue ? $"S{it.Slot.Value} " : string.Empty)}{it.Name} ETA {etaLoc} (残 {lead}分) {rt}");
+                                    var msg = $"[Sub] {(it.Slot.HasValue ? $"S{it.Slot.Value} " : string.Empty)}{it.Name} 残り{lead}分 (ETA {etaLoc}) {rt} <se.1>"; // 半角スペースは <se.1> の直前に挿入済み
+                                    _chat.Print(msg);
+                                    try { _toast.ShowQuest(msg, new Dalamud.Game.Gui.Toast.QuestToastOptions()); } catch { try { _toast.ShowError(msg); } catch { } }
                                 }
                                 catch { }
 

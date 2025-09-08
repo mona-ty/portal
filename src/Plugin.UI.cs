@@ -5,6 +5,11 @@ using System.Text.Json;
 using ImGui = Dalamud.Bindings.ImGui.ImGui;
 using ImGuiTableFlags = Dalamud.Bindings.ImGui.ImGuiTableFlags;
 using ImGuiWindowFlags = Dalamud.Bindings.ImGui.ImGuiWindowFlags;
+using ImGuiCond = Dalamud.Bindings.ImGui.ImGuiCond;
+using ImGuiConfigFlags = Dalamud.Bindings.ImGui.ImGuiConfigFlags;
+using XIVSubmarinesReturn.UI;
+using Dalamud.Interface.Components;
+using Dalamud.Interface;
 using System.Numerics;
 
 namespace XIVSubmarinesReturn;
@@ -21,6 +26,125 @@ public sealed partial class Plugin
     private string _routeEditName = string.Empty;
     private string _alarmLeadText = string.Empty;
     private string _routeLearnLetters = string.Empty; // e.g., "M>R>O>J>Z"
+    private string _filterText = string.Empty;
+    private int _sortField = 3; // 0=Name 1=Slot 2=Rank 3=ETA
+    private bool _sortAsc = true;
+    private XIVSubmarinesReturn.UI.SnapshotTable _snapTable = new XIVSubmarinesReturn.UI.SnapshotTable();    // reveal toggles for masked inputs
+    private bool _revealDiscordWebhook;
+    private bool _showLegacyUi = false;
+    private int _mogshipLastMaps;
+    private int _mogshipLastAliases;
+    public void Ui_ReloadSnapshot() { try { _uiLastReadUtc = DateTime.MinValue; _uiStatus = "JSON再読込 実行"; } catch { } }
+    public void Ui_ImportFromMogship() { try { TryImportFromMogship(); } catch (Exception ex) { _uiStatus = $"Mogship取込失敗: {ex.Message}"; } }
+    public void Ui_OpenBridgeFolder() { try { TryOpenFolder(System.IO.Path.GetDirectoryName(BridgeWriter.CurrentFilePath())); } catch { } }
+    public void Ui_OpenConfigFolder() { try { TryOpenFolder(_pi.ConfigDirectory?.FullName); } catch { } }
+    public string Ui_GetUiStatus() => _uiStatus ?? string.Empty;
+    public void Ui_SetUiStatus(string s) { _uiStatus = s ?? string.Empty; }
+    public string Ui_GetProbeText() => _probeText ?? string.Empty;
+    public void Ui_ClearProbeText() { _probeText = string.Empty; }
+    public void Ui_DrawSnapshotTable() { try { DrawSnapshotTable2(); } catch { } }
+    public void Ui_ReloadAliasIndex()
+    {
+        try { _sectorResolver?.ReloadAliasIndex(); _uiStatus = "Alias JSON 再読込 完了"; }
+        catch (Exception ex) { _uiStatus = $"Alias 再読込 失敗: {ex.Message}"; }
+    }
+    public int Ui_GetSnapshotCount() { try { return _uiSnapshot?.Items?.Count ?? 0; } catch { return 0; } }
+    public void Ui_OpenTrace()
+    {
+        try
+        {
+            var path = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(BridgeWriter.CurrentFilePath()) ?? string.Empty, "xsr_debug.log");
+            if (!string.IsNullOrWhiteSpace(path))
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = path, UseShellExecute = true });
+        }
+        catch { }
+    }
+    public void Ui_LearnNames() { try { CmdLearnNames(); _uiStatus = "Learn triggered"; } catch (Exception ex) { _uiStatus = $"Learn failed: {ex.Message}"; } }
+    // UIからの取得は無効化: 常にメモリ経由で手動取得
+    public void Ui_DumpUi() { try { CmdDumpFromMemory(); _uiStatus = "Capture(Memory) triggered"; } catch (Exception ex) { _uiStatus = $"Capture(Memory) failed: {ex.Message}"; } }
+    public void Ui_DumpMemory() { try { CmdDumpFromMemory(); _uiStatus = "Capture(Memory) triggered"; } catch (Exception ex) { _uiStatus = $"Capture(Memory) failed: {ex.Message}"; } }
+    public void Ui_Probe() { try { _probeText = ProbeToText(); _uiStatus = "Probe done"; } catch (Exception ex) { _uiStatus = $"Probe failed: {ex.Message}"; } }
+
+    // Day2: Alarm/Notion/Discord テスト系の補助
+    public void Ui_TestGameAlarm()
+    {
+        try
+        {
+            var leads = (Config.AlarmLeadMinutes ?? new System.Collections.Generic.List<int>()).ToList();
+            int lead = (leads.Count > 0) ? leads.Min() : 0;
+            var now = DateTimeOffset.UtcNow;
+            var snap = new SubmarineSnapshot
+            {
+                PluginVersion = typeof(Plugin).Assembly.GetName().Version?.ToString(3) ?? "0.0.0",
+                Items = new System.Collections.Generic.List<SubmarineRecord>
+                {
+                    new() { Name = "Test Alarm", Slot = 1, Rank = 0, RouteKey = "Point-13 - Point-18", EtaUnix = now.AddMinutes(lead).ToUnixTimeSeconds() }
+                }
+            };
+            try { Services.EtaFormatter.Enrich(snap); } catch { }
+            try { _alarm?.UpdateSnapshot(snap); } catch { }
+            try { _alarm?.Tick(DateTimeOffset.UtcNow); } catch { }
+            _uiStatus = "Game alarm test executed";
+        }
+        catch (Exception ex) { _uiStatus = $"Game alarm test failed: {ex.Message}"; }
+    }
+
+    public void Ui_TestDiscord()
+    {
+        try
+        {
+            var snap = _uiSnapshot ?? new SubmarineSnapshot
+            {
+                PluginVersion = typeof(Plugin).Assembly.GetName().Version?.ToString(3) ?? "0.0.0",
+                Items = new System.Collections.Generic.List<SubmarineRecord>
+                {
+                    new() { Name = "Submarine-1", Slot = 1, DurationMinutes = 10, RouteKey = "Point-1 - Point-2", Rank = 10, EtaUnix = DateTimeOffset.UtcNow.AddMinutes(10).ToUnixTimeSeconds() }
+                }
+            };
+            try { Services.EtaFormatter.Enrich(snap); } catch { }
+            if (_discord != null)
+            {
+                _discord.NotifySnapshotAsync(snap, Config.DiscordLatestOnly).GetAwaiter().GetResult();
+                _uiStatus = "Discord test sent";
+            }
+            else _uiStatus = "Discord client not ready";
+        }
+        catch (Exception ex) { _uiStatus = $"Discord test failed: {ex.Message}"; }
+    }
+
+    public void Ui_ValidateNotion()
+    {
+        try
+        {
+            if (_notion == null) { _uiStatus = "Notion client not ready"; return; }
+            var msg = _notion.EnsureDatabasePropsAsync().GetAwaiter().GetResult();
+            _uiStatus = msg ?? "Notion validate done";
+        }
+        catch (Exception ex) { _uiStatus = $"Notion validate failed: {ex.Message}"; }
+    }
+
+    public void Ui_TestNotion()
+    {
+        try
+        {
+            if (_notion == null) { _uiStatus = "Notion client not ready"; return; }
+            var snap = _uiSnapshot ?? new SubmarineSnapshot
+            {
+                PluginVersion = typeof(Plugin).Assembly.GetName().Version?.ToString(3) ?? "0.0.0",
+                Items = new System.Collections.Generic.List<SubmarineRecord>
+                {
+                    new() { Name = "Submarine-1", Slot = 1, DurationMinutes = 10, RouteKey = "Point-1 - Point-2", Rank = 10, EtaUnix = DateTimeOffset.UtcNow.AddMinutes(10).ToUnixTimeSeconds() }
+                }
+            };
+            try { Services.EtaFormatter.Enrich(snap); } catch { }
+            _notion.UpsertSnapshotAsync(snap, Config.NotionLatestOnly).GetAwaiter().GetResult();
+            _uiStatus = "Notion test enqueued";
+        }
+        catch (Exception ex) { _uiStatus = $"Notion test failed: {ex.Message}"; }
+    }
+    private bool _revealNotionToken;
+    private bool _revealGcalRefresh;
+    private bool _revealGcalSecret;
 
     private void InitUI()
     {
@@ -37,12 +161,21 @@ public sealed partial class Plugin
         if (!_showUI) return;
         try
         {
+            try { var io = ImGui.GetIO(); io.ConfigFlags |= ImGuiConfigFlags.DockingEnable; } catch { }
+            // 初回のみデフォルトサイズを設定（毎回大きくならないよう Appearing → FirstUseEver）
+            ImGui.SetNextWindowSize(new System.Numerics.Vector2(760, 520), ImGuiCond.FirstUseEver);
             ImGui.SetNextWindowSizeConstraints(new System.Numerics.Vector2(520, 320), new System.Numerics.Vector2(2000, 2000));
-            if (!ImGui.Begin("XIV Submarines Return", ref _showUI, ImGuiWindowFlags.AlwaysAutoResize))
+
+            var winFlags = ImGuiWindowFlags.None;
+            if (Config.AutoResizeWindow)
+                winFlags |= ImGuiWindowFlags.AlwaysAutoResize; // タブ内容に合わせて自動で縦幅を調整
+
+            if (!ImGui.Begin("XIV Submarines Return", ref _showUI, winFlags))
             {
                 ImGui.End();
                 return;
             }
+            try { ImGui.SetWindowFontScale(Math.Clamp(Config.UiFontScale, 0.8f, 1.5f)); } catch { }
 
             // Tabs（概要 / アラーム / デバッグ / スナップショット(旧)）
             if (ImGui.BeginTabBar("xsr_tabs"))
@@ -50,6 +183,9 @@ public sealed partial class Plugin
                 // 概要
                 if (ImGui.BeginTabItem("概要"))
                 {
+                    try { XIVSubmarinesReturn.UI.OverviewTab.Draw(this); } catch { }
+                    ImGui.Separator(); if (!_showLegacyUi) goto __OV_END;
+                    ImGui.Separator(); ImGui.TextDisabled("(旧UI)");
                     // 概要: 最小構成（自動取得 + Addon名）
                     bool autoCap = Config.AutoCaptureOnWorkshopOpen;
                     if (ImGui.Checkbox("工房を開いたら自動取得", ref autoCap))
@@ -57,6 +193,20 @@ public sealed partial class Plugin
                         Config.AutoCaptureOnWorkshopOpen = autoCap;
                         SaveConfig();
                     }
+
+                    // Top bar (Reload / Mogship import / Open folders)
+                    try
+                    {
+                        if (Widgets.IconButton(FontAwesomeIcon.Sync, "再読込")) { _uiLastReadUtc = DateTime.MinValue; _uiStatus = "再読込"; }
+                        ImGui.SameLine();
+                        if (Widgets.IconButton(FontAwesomeIcon.CloudDownloadAlt, "Mogship取込")) { TryImportFromMogship(); }
+                        ImGui.SameLine();
+                        if (Widgets.IconButton(FontAwesomeIcon.FolderOpen, "Bridgeフォルダ")) { TryOpenFolder(System.IO.Path.GetDirectoryName(BridgeWriter.CurrentFilePath())); }
+                        ImGui.SameLine();
+                        if (Widgets.IconButton(FontAwesomeIcon.Cog, "Configフォルダ")) { TryOpenFolder(_pi.ConfigDirectory?.FullName); }
+                        if (!string.IsNullOrEmpty(_uiStatus)) { ImGui.SameLine(); ImGui.TextDisabled(_uiStatus); }
+                    }
+                    catch { }
 
                     // Addon name input
                     var addonName = Config.AddonName ?? string.Empty;
@@ -67,6 +217,23 @@ public sealed partial class Plugin
                     }
 
                     ImGui.Separator();
+                    // 外観設定（密度/フォント/ETA強調）
+                    int dens = Config.UiRowDensity == UiDensity.Compact ? 0 : 1;
+                    if (ImGui.RadioButton("Compact", dens == 0)) { Config.UiRowDensity = UiDensity.Compact; SaveConfig(); dens = 0; }
+                    ImGui.SameLine();
+                    if (ImGui.RadioButton("Cozy", dens == 1)) { Config.UiRowDensity = UiDensity.Cozy; SaveConfig(); dens = 1; }
+                    var fscale = Config.UiFontScale;
+                    if (ImGui.SliderFloat("FontScale", ref fscale, 0.9f, 1.2f)) { Config.UiFontScale = fscale; SaveConfig(); }
+                    var accStr = Config.AccentColor ?? "#1E90FF";
+                    if (ImGui.InputText("Accent(#RRGGBB)", ref accStr, 16)) { Config.AccentColor = accStr; SaveConfig(); }
+                    try
+                    {
+                        var acc = Theme.ParseColor(Config.AccentColor, new Vector4(0.12f, 0.55f, 0.96f, 1f));
+                        ImGui.SameLine(); ImGui.ColorButton("acc_prev", acc);
+                    }
+                    catch { }
+                    int soon = Config.HighlightSoonMins;
+                    if (ImGui.SliderInt("ETA強調(分)", ref soon, 0, 60)) { Config.HighlightSoonMins = soon; SaveConfig(); }
                     ImGui.TextDisabled("詳細設定はデバッグタブへ移動しました。");
 
                     // 手動取得（UIは削除し、メモリ取得のみ残す）
@@ -98,10 +265,19 @@ public sealed partial class Plugin
                         if (ImGui.RadioButton("P番号", rMode == 1)) { Config.RouteDisplay = RouteDisplayMode.ShortIds; SaveConfig(); rMode = 1; }
                         ImGui.SameLine();
                         if (ImGui.RadioButton("原文", rMode == 2)) { Config.RouteDisplay = RouteDisplayMode.Raw; SaveConfig(); rMode = 2; }
+                        // Mapヒント + Alias再読込
+                        var mapHint = Config.SectorMapHint ?? string.Empty;
+                        if (ImGui.InputText("Mapヒント", ref mapHint, 64)) { Config.SectorMapHint = mapHint; SaveConfig(); }
+                        ImGui.SameLine();
+                        if (ImGui.Button("Alias JSON再読込"))
+                        {
+                            try { _sectorResolver?.ReloadAliasIndex(); _uiStatus = "Alias reloaded"; }
+                            catch (Exception ex) { _uiStatus = $"Alias reload failed: {ex.Message}"; }
+                        }
                     }
                     catch { }
 
-                    try { DrawSnapshotTable(); } catch { }
+                    try { DrawSnapshotTable2(); } catch { }
 
 #if XSR_FEAT_GCAL
                     // Google Calendar (soft-disabled)
@@ -116,11 +292,11 @@ public sealed partial class Plugin
                         var calId = Config.GoogleCalendarId ?? string.Empty;
                         if (ImGui.InputText("CalendarId", ref calId, 128)) { Config.GoogleCalendarId = calId; SaveConfig(); }
                         var rt = Config.GoogleRefreshToken ?? string.Empty;
-                        if (ImGui.InputText("RefreshToken", ref rt, 256)) { Config.GoogleRefreshToken = rt; SaveConfig(); }
+                        if (Widgets.MaskedInput("RefreshToken", ref rt, 256, ref _revealGcalRefresh)) { Config.GoogleRefreshToken = rt; SaveConfig(); }
                         var cid = Config.GoogleClientId ?? string.Empty;
                         if (ImGui.InputText("ClientId", ref cid, 256)) { Config.GoogleClientId = cid; SaveConfig(); }
                         var cs = Config.GoogleClientSecret ?? string.Empty;
-                        if (ImGui.InputText("ClientSecret", ref cs, 256)) { Config.GoogleClientSecret = cs; SaveConfig(); }
+                        if (Widgets.MaskedInput("ClientSecret", ref cs, 256, ref _revealGcalSecret)) { Config.GoogleClientSecret = cs; SaveConfig(); }
                         if (ImGui.Button("Test Google"))
                         {
                             try
@@ -133,19 +309,22 @@ public sealed partial class Plugin
                     }
 #endif
 
-                    ImGui.EndTabItem();
+                    __OV_END: ImGui.EndTabItem();
                 }
 
                 // アラーム
                 if (ImGui.BeginTabItem("アラーム"))
                 {
+                    try { XIVSubmarinesReturn.UI.AlarmTab.Draw(this); } catch { }
+                    ImGui.Separator(); if (!_showLegacyUi) goto __AL_END;
+                    ImGui.Separator(); ImGui.TextDisabled("(旧UI)");
                     // Discord
                     if (ImGui.CollapsingHeader("Discord"))
                     {
                         bool dEnable = Config.DiscordEnabled;
                         if (ImGui.Checkbox("有効", ref dEnable)) { Config.DiscordEnabled = dEnable; SaveConfig(); }
                         var wh = Config.DiscordWebhookUrl ?? string.Empty;
-                        if (ImGui.InputText("Webhook URL", ref wh, 512)) { Config.DiscordWebhookUrl = wh; SaveConfig(); }
+                        if (Widgets.MaskedInput("Webhook URL", ref wh, 512, ref _revealDiscordWebhook)) { Config.DiscordWebhookUrl = wh; SaveConfig(); }
                         bool latestOnly = Config.DiscordLatestOnly;
                         if (ImGui.Checkbox("最早(ETA最小)のみ", ref latestOnly)) { Config.DiscordLatestOnly = latestOnly; SaveConfig(); }
                         bool useEmbeds = Config.DiscordUseEmbeds;
@@ -218,7 +397,7 @@ public sealed partial class Plugin
                         bool nEnable = Config.NotionEnabled;
                         if (ImGui.Checkbox("有効", ref nEnable)) { Config.NotionEnabled = nEnable; SaveConfig(); }
                         var tok = Config.NotionToken ?? string.Empty;
-                        if (ImGui.InputText("Integration Token", ref tok, 256)) { Config.NotionToken = tok; SaveConfig(); }
+                        if (Widgets.MaskedInput("Integration Token", ref tok, 256, ref _revealNotionToken)) { Config.NotionToken = tok; SaveConfig(); }
                         var db = Config.NotionDatabaseId ?? string.Empty;
                         if (ImGui.InputText("Database ID", ref db, 256)) { Config.NotionDatabaseId = db; SaveConfig(); }
                         bool nLatest = Config.NotionLatestOnly;
@@ -293,13 +472,16 @@ public sealed partial class Plugin
                         }
                     }
 
-                    ImGui.EndTabItem();
+                    __AL_END: ImGui.EndTabItem();
                 }
 
                 // デバッグ
                 if (ImGui.BeginTabItem("デバッグ"))
                 {
                     // デバッグ設定
+                    try { XIVSubmarinesReturn.UI.DebugTab.Draw(this); } catch { }
+                    ImGui.Separator(); if (!_showLegacyUi) goto __DBG_END;
+                    ImGui.Separator(); ImGui.TextDisabled("(旧UI)");
                     if (ImGui.CollapsingHeader("デバッグ"))
                     {
                         bool dbg = Config.DebugLogging;
@@ -323,19 +505,9 @@ public sealed partial class Plugin
                     }
 
                     // ツール群（1行=ボタン+説明）
-                    if (ImGui.Button("UIから名称学習"))
-                    {
-                        try { CmdLearnNames(); _uiStatus = "Learn triggered"; }
-                        catch (Exception ex) { _uiStatus = $"Learn failed: {ex.Message}"; }
-                    }
-                    ImGui.SameLine(); ImGui.Text("一覧の名前をUIから学習し補完します");
+                    // UIからの取得ボタンは非表示（機能無効化）
 
-                    if (ImGui.Button("UIから取得"))
-                    {
-                        try { OnCmdDump("/subdump", string.Empty); _uiStatus = "Capture(UI) triggered"; }
-                        catch (Exception ex) { _uiStatus = $"Capture(UI) failed: {ex.Message}"; }
-                    }
-                    ImGui.SameLine(); ImGui.Text("ゲーム内UIから現在の一覧を取得します");
+                    // UIからの取得ボタンは非表示（機能無効化）
 
                     if (ImGui.Button("メモリから取得"))
                     {
@@ -518,7 +690,7 @@ public sealed partial class Plugin
                         }
                     }
 
-                    ImGui.EndTabItem();
+                    __DBG_END: ImGui.EndTabItem();
                 }
 
                 ImGui.EndTabBar();
@@ -538,11 +710,11 @@ public sealed partial class Plugin
                 var calId = Config.GoogleCalendarId ?? string.Empty;
                 if (ImGui.InputText("CalendarId", ref calId, 128)) { Config.GoogleCalendarId = calId; SaveConfig(); }
                 var rt = Config.GoogleRefreshToken ?? string.Empty;
-                if (ImGui.InputText("RefreshToken", ref rt, 256)) { Config.GoogleRefreshToken = rt; SaveConfig(); }
+                if (Widgets.MaskedInput("RefreshToken", ref rt, 256, ref _revealGcalRefresh)) { Config.GoogleRefreshToken = rt; SaveConfig(); }
                 var cid = Config.GoogleClientId ?? string.Empty;
                 if (ImGui.InputText("ClientId", ref cid, 256)) { Config.GoogleClientId = cid; SaveConfig(); }
                 var cs = Config.GoogleClientSecret ?? string.Empty;
-                if (ImGui.InputText("ClientSecret", ref cs, 256)) { Config.GoogleClientSecret = cs; SaveConfig(); }
+                if (Widgets.MaskedInput("ClientSecret", ref cs, 256, ref _revealGcalSecret)) { Config.GoogleClientSecret = cs; SaveConfig(); }
                 if (ImGui.Button("Test Google"))
                 {
                     try
@@ -561,7 +733,7 @@ public sealed partial class Plugin
                 bool dEnable = Config.DiscordEnabled;
                 if (ImGui.Checkbox("Enable", ref dEnable)) { Config.DiscordEnabled = dEnable; SaveConfig(); }
                 var wh = Config.DiscordWebhookUrl ?? string.Empty;
-                if (ImGui.InputText("Webhook URL", ref wh, 512)) { Config.DiscordWebhookUrl = wh; SaveConfig(); }
+                if (Widgets.MaskedInput("Webhook URL", ref wh, 512, ref _revealDiscordWebhook)) { Config.DiscordWebhookUrl = wh; SaveConfig(); }
                 bool latestOnly = Config.DiscordLatestOnly;
                 if (ImGui.Checkbox("Earliest only (ETA min) / \u6700\u65e9(ETA\u6700\u5c0f)", ref latestOnly)) { Config.DiscordLatestOnly = latestOnly; SaveConfig(); }
                 bool useEmbeds = Config.DiscordUseEmbeds;
@@ -655,7 +827,7 @@ public sealed partial class Plugin
                 bool nEnable = Config.NotionEnabled;
                 if (ImGui.Checkbox("Enable", ref nEnable)) { Config.NotionEnabled = nEnable; SaveConfig(); }
                 var tok = Config.NotionToken ?? string.Empty;
-                if (ImGui.InputText("Integration Token", ref tok, 256)) { Config.NotionToken = tok; SaveConfig(); }
+                if (Widgets.MaskedInput("Integration Token", ref tok, 256, ref _revealNotionToken)) { Config.NotionToken = tok; SaveConfig(); }
                 var db = Config.NotionDatabaseId ?? string.Empty;
                 if (ImGui.InputText("Database ID", ref db, 256)) { Config.NotionDatabaseId = db; SaveConfig(); }
                 bool nLatest = Config.NotionLatestOnly;
@@ -754,6 +926,7 @@ public sealed partial class Plugin
                         var json = File.ReadAllText(path);
                         _uiSnapshot = JsonSerializer.Deserialize<SubmarineSnapshot>(json);
                         _uiLastReadUtc = lastWrite;
+                        _uiStatus = $"JSON再読込 完了 {DateTime.Now:HH:mm:ss}";
                     }
                     catch (Exception ex)
                     {
@@ -762,7 +935,6 @@ public sealed partial class Plugin
                 }
             }
 
-            ImGui.Text($"スナップショット: {( _uiSnapshot?.Items?.Count ?? 0)} 件");
             if (_uiSnapshot?.Items == null || _uiSnapshot.Items.Count == 0)
             {
                 ImGui.TextDisabled("データがありません。取得を実行してください。");
@@ -800,7 +972,36 @@ public sealed partial class Plugin
                         var etaLoc = (it.Extra != null && it.Extra.TryGetValue("EtaLocal", out var t)) ? t : string.Empty;
                         var rem = (it.Extra != null && it.Extra.TryGetValue("RemainingText", out var r)) ? r : string.Empty;
                         var txt = string.IsNullOrWhiteSpace(rem) ? (etaLoc ?? string.Empty) : $"{etaLoc} / {rem}";
-                        ImGui.Text(txt ?? string.Empty);
+                        bool highlight = false;
+                        try
+                        {
+                            int minsLeft = int.MaxValue;
+                            if (it.EtaUnix.HasValue && it.EtaUnix.Value > 0)
+                            {
+                                var eta = DateTimeOffset.FromUnixTimeSeconds(it.EtaUnix.Value);
+                                minsLeft = (int)Math.Round((eta - DateTimeOffset.Now).TotalMinutes);
+                            }
+                            else if (!string.IsNullOrWhiteSpace(rem))
+                            {
+                                var m = System.Text.RegularExpressions.Regex.Match(rem, @"(?:(?<h>\d+)\s*時間)?\s*(?<m>\d+)\s*分");
+                                if (m.Success)
+                                {
+                                    int h = m.Groups["h"].Success ? int.Parse(m.Groups["h"].Value) : 0;
+                                    int mm = m.Groups["m"].Success ? int.Parse(m.Groups["m"].Value) : 0;
+                                    minsLeft = Math.Max(0, h * 60 + mm);
+                                }
+                            }
+                            if (minsLeft <= Config.HighlightSoonMins) highlight = true;
+                        }
+                        catch { }
+                        if (highlight)
+                        {
+                            var acc = Theme.ParseColor(Config.AccentColor, new Vector4(0.12f, 0.55f, 0.96f, 1f));
+                            ImGui.PushStyleColor(Dalamud.Bindings.ImGui.ImGuiCol.Text, acc);
+                            ImGui.Text(txt ?? string.Empty);
+                            ImGui.PopStyleColor();
+                        }
+                        else ImGui.Text(txt ?? string.Empty);
                     }
                     catch { ImGui.Text(""); }
 
@@ -809,13 +1010,66 @@ public sealed partial class Plugin
                     try
                     {
                         var show = BuildRouteDisplay(it);
-                        ImGui.Text(show ?? string.Empty);
+                        if (ImGui.Selectable(show ?? string.Empty, false))
+                        {
+                            try { ImGui.SetClipboardText(show ?? string.Empty); } catch { }
+                            _uiStatus = "ルートをコピーしました";
+                        }
                     }
                     catch { ImGui.Text(it.RouteKey ?? string.Empty); }
                 }
 
                 ImGui.EndTable();
             }
+        }
+        catch (Exception ex)
+        {
+            _uiStatus = $"Table error: {ex.Message}";
+        }
+    }
+
+    // New table drawer (encapsulated SnapshotTable)
+    private void DrawSnapshotTable2()
+    {
+        try
+        {
+            // Reload snapshot if file changed or last read too old (5s)
+            var path = BridgeWriter.CurrentFilePath();
+            if (!string.IsNullOrEmpty(path) && File.Exists(path))
+            {
+                var lastWrite = File.GetLastWriteTimeUtc(path);
+                if (_uiSnapshot == null || lastWrite > _uiLastReadUtc || (DateTime.UtcNow - _uiLastReadUtc) > TimeSpan.FromSeconds(5))
+                {
+                    try
+                    {
+                        _uiPrevSnapshot = _uiSnapshot;
+                        var json = File.ReadAllText(path);
+                        _uiSnapshot = JsonSerializer.Deserialize<SubmarineSnapshot>(json);
+                        _uiLastReadUtc = lastWrite;
+                    }
+                    catch (Exception ex)
+                    {
+                        _uiStatus = $"Read json failed: {ex.Message}";
+                    }
+                }
+            }
+
+            ImGui.Text($"スナップショット: {( _uiSnapshot?.Items?.Count ?? 0)} 件");
+            if (_uiSnapshot?.Items == null || _uiSnapshot.Items.Count == 0)
+            {
+                ImGui.TextDisabled("データがありません。取得を実行してください。");
+                return;
+            }
+
+            _snapTable.Draw(_uiSnapshot.Items,
+                Config,
+                (id) =>
+                {
+                    try { return _sectorResolver?.GetAliasForSector((uint)id, Config.SectorMapHint); } catch { return null; }
+                },
+                (msg) => { _uiStatus = msg; },
+                () => { try { SaveConfig(); } catch { } }
+            );
         }
         catch (Exception ex)
         {
@@ -848,14 +1102,16 @@ public sealed partial class Plugin
                     return string.Join('>', nums.Select(n => $"P{n}"));
                 case RouteDisplayMode.Letters:
                 default:
-                    // 学習済みレター（RouteNames）で置換。足りない箇所はP番号で補完
+                    // Resolver優先→学習（RouteNames）→P番号
                     var parts = new System.Collections.Generic.List<string>(nums.Count);
+                    var hint = Config.SectorMapHint;
                     foreach (var n in nums)
                     {
-                        if (Config.RouteNames != null && Config.RouteNames.TryGetValue((byte)n, out var nm) && !string.IsNullOrWhiteSpace(nm))
-                            parts.Add(nm);
-                        else
-                            parts.Add($"P{n}");
+                        string? letter = null;
+                        try { letter = _sectorResolver?.GetAliasForSector((uint)n, hint); } catch { }
+                        if (string.IsNullOrWhiteSpace(letter) && Config.RouteNames != null && Config.RouteNames.TryGetValue((byte)n, out var nm) && !string.IsNullOrWhiteSpace(nm))
+                            letter = nm;
+                        parts.Add(string.IsNullOrWhiteSpace(letter) ? $"P{n}" : letter!);
                     }
                     var text = string.Join('>', parts);
                     // 全てP番号（未学習）なら、原文のほうが分かりやすいので原文を優先
@@ -877,6 +1133,59 @@ public sealed partial class Plugin
             return false;
         }
         catch { return false; }
+    }
+
+    private int CompareItems(SubmarineRecord? a, SubmarineRecord? b, int field, bool asc)
+    {
+        try
+        {
+            int s = 0;
+            switch (field)
+            {
+                case 0: s = string.Compare(a?.Name, b?.Name, StringComparison.OrdinalIgnoreCase); break;
+                case 1: s = Nullable.Compare(a?.Slot, b?.Slot); break;
+                case 2: s = Nullable.Compare(a?.Rank, b?.Rank); break;
+                case 3:
+                    long ea = a?.EtaUnix ?? long.MinValue;
+                    long eb = b?.EtaUnix ?? long.MinValue;
+                    s = ea.CompareTo(eb);
+                    break;
+            }
+            return asc ? s : -s;
+        }
+        catch { return 0; }
+    }
+
+    private void TryImportFromMogship()
+    {
+        try
+        {
+            var aliasPath = System.IO.Path.Combine(_pi.ConfigDirectory?.FullName ?? string.Empty, "AliasIndex.json");
+            var importer = new XIVSubmarinesReturn.Sectors.MogshipImporter(new System.Net.Http.HttpClient(), _log);
+            var t = importer.ImportAsync(aliasPath); t.Wait();
+            var maps = 0; var aliases = 0;
+            try { (maps, aliases) = t.Result; } catch { }
+            _mogshipLastMaps = maps; _mogshipLastAliases = aliases;
+            _sectorResolver?.ReloadAliasIndex();
+            _uiStatus = $"Mogship取り込み: { _mogshipLastAliases } aliases / { _mogshipLastMaps } maps";
+        }
+        catch (Exception ex) { _uiStatus = $"取込失敗: {ex.Message}"; }
+    }
+
+    private void TryOpenFolder(string? path)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(path)) return;
+            if (!System.IO.Directory.Exists(path)) return;
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "explorer.exe",
+                Arguments = path,
+                UseShellExecute = true
+            });
+        }
+        catch { }
     }
 
     private string ProbeToText()
@@ -910,3 +1219,13 @@ public sealed partial class Plugin
         return string.Join(Environment.NewLine, lines);
     }
 }
+
+
+
+
+
+
+
+
+
+

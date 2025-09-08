@@ -37,14 +37,19 @@ namespace XIVSubmarinesReturn.Services
                         var remain = eta - DateTimeOffset.Now;
                         var mins = Math.Max(0, (int)Math.Round(remain.TotalMinutes));
                         it.Extra["EtaLocal"] = eta.ToString("HH:mm");
+                        // Discord等で日付まで欲しいケース向けに完全表記も付与
+                        it.Extra["EtaLocalFull"] = eta.ToString("yyyy/M/d HH:mm");
                         it.Extra["RemainingText"] = mins < 60 ? $"{mins}\u5206" : $"{mins / 60}\u6642\u9593{mins % 60}\u5206";
                         // (removed duplicate)
                         // duplicate removed
                     }
 
-                    // Route short
+                    // Route short（既に他処理で設定済みなら上書きしない）
                     if (!string.IsNullOrWhiteSpace(it.RouteKey))
-                        it.Extra["RouteShort"] = ShortRoute(it.RouteKey);
+                    {
+                        if (!it.Extra.TryGetValue("RouteShort", out var existing) || string.IsNullOrWhiteSpace(existing))
+                            it.Extra["RouteShort"] = ShortRoute(it.RouteKey);
+                    }
                 }
             }
             catch { }

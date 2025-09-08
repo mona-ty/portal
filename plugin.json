@@ -8,8 +8,8 @@
   "DalamudApiLevel": 13,
   "Tags": ["submarine", "workshop", "utilities"],
   "RepoUrl": "",
-  "IconUrl": "",
-  "ImageUrls": [],
+  "IconUrl": "icon.png",
+  "ImageUrls": ["icon.png"],
   "Changelog": "Initial scaffold",
   "AssemblyVersion": "0.1.1"
 }
