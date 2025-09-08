@@ -1,445 +1,559 @@
-以下は**そのままコピペで Codex に渡す前提**の、実装タスク指示書です。
-目的は「**外部スプレッドシートに依存せず**、\*\*ゲーム内Excel（Lumina経由のシート）**だけで潜水艦セクターを解決し、必要なら**ローカルJSONのエイリアス表（A/B/…）\*\*で“文字⇄通し番号”を補完する」仕組みをプラグインへ追加することです。
-（Dalamud での Excel 取得APIは `IDataManager.GetExcelSheet<T>()`。署名は公式APIに掲載されています。([Dalamud][1])／Excelの実体はFFXIVのEXL/EXH/EXDバイナリで、Luminaのドキュメントとxiv.devで仕様化されています。([Lumina][2], [XIV Dev][3])／Lumina.Excel はゲームバージョンに追随する自動生成定義です。([NuGet][4])）
-**注**：「SubmarineExploration」シートは外部SDKやXIVAPIのシート名でも確認できます。([The Swift Package Index][5])
+# XIV Submarines Return — UI日本語化＆縦並び化 修正計画（codex向け実装メモ）
+
+本ドキュメントは **そのまま Copilot/Codex に渡して実装**できるよう、目的・変更方針・受入条件・ファイル別パッチ（差分／置換）をまとめたものです。
+現状のUI/コードの状況は、AIレビュー資料および該当ソースで確認済みです（`OverviewTab` がカード形式＋英語ラベル、`Snapshot` 見出しなど）。 また、UI本体は `Plugin.UI.cs` から `OverviewTab/AlarmTab/DebugTab` を呼び出す構成です。スナップショット表示は `SnapshotTable` 実装を利用しています。
 
 ---
 
-## ✅ タスク概要（Codex向けブリーフ）
+## 1) 要求の要約（ユーザー要望）
 
-**リポジトリ**：既存 Dalamud プラグイン
-**追加機能名**：`SubmarineSectorResolver`
-**要件**：
+* **英語表記の日本語化**
 
-1. `IDataManager`（=Lumina）から**ゲーム内Excelの “SubmarineExploration”** を読み、
-   `SectorId(RowId) / Name(地点名) / Map(海域名)` を列挙・キャッシュする。([Dalamud][1])
-2. 文字エイリアス（A, B, …, AA, AB…）は**ローカルJSON**で補完。JSONが無い/不完全でも**壊れず**に `MapName + PlaceName` を表示できる。
-3. `P18` のような表記は**多義的**なので、次の順で解決:
+  * 「Operations」「Manual (Memory)」「AutoCapture〜」「Appearance/Display」等を日本語化。
+* **カード形式 UI の廃止**
 
-   * **(a) 数字部のみ（例: "18"）**→ SectorId=18 を直接引く。
-   * **(b) 文字+数字（例: "P18"）**→ `SectorId=18` を優先解決し、同時に\*\*文字（P）との不一致があれば“参考表示”\*\*に留める。
-   * **(c) 文字のみ（例: "R"）**→ **ローカルJSONの `Map + Alias`** から該当セクター候補を列挙（曖昧なら複数提示）。
-4. スラッシュコマンド `/sv test <code>` を追加。`"P18"` や `"18"` を渡すと、`Map / Alias / SectorId / PlaceName` をチャットに出力。
-5. （任意）設定UIに\*\*「ローカルJSONを再読み込み」「XIVAPIからJSONを再生成（手動）」**ボタンを置く。XIVAPI v2は**スキーマ&パッチを固定して取得安定化\*\*できるが、**ランタイム必須ではない**（押下時のみHTTP）。([xivapi][6])
+  * すべてのタブで “カード” 枠をやめ、**縦に並べる**フラットなフォームに変更。
+* **見出しの改善**
 
-**備考**：
+  * 「Snapshot」→ **「航路情報」** に改名。
+* **アラームタブ**
 
-* 例として **Concealed Bay は Deep‑sea Site(溺没海) の Alias=R**。([FFXIV Wiki][7], [Gamer Escape][8])
-* コミュニティ資料では **“Sector 18 | R – Concealed Bay”** の併記も確認できる（外部資料は“参考”扱い）。([Eorzea World][9])
-* Mogshipの計算機UIも `R = Concealed Bay, S = Deep‑sea Site 5, T = Purgatory …` の並びを表示している（参考）。([Mogship][10])
+  * 同じくカード形式を廃止して縦並び化。
+  * **Notion の設定項目を再掲**（有効化・Token・DB・Upsertキー方式・プロパティ名など）。
+  * **ゲーム内アラームのテストボタン**を追加（動作確認用）。
+* **デバッグタブ**
+
+  * ボタンの意味が明確になるよう、**各ボタンの右に日本語で説明文**を表示。
+  * 詳細設定の各項目（SelectString〜など）は**噛み砕いた日本語**に改名＋ツールチップ付与。
+* **既存機能互換**
+
+  * 既存の機能／設定値／保存形式を壊さない。
 
 ---
 
-## 📁 追加/変更ファイル一覧
+## 2) 変更方針（概要）
 
+1. **`OverviewTab` を全面リライト**
+
+   * 英語ラベルを日本語化・カード排除・2カラムグリッドを廃止し、**縦並び**で「操作」「表示設定」「航路情報」を順に表示。
+   * 見出し「Snapshot」→ **「航路情報」**。
+2. **`Widgets.Card` をボーダー無しの“素通り”コンテナ化**
+
+   * 既存コードで `Widgets.Card` が残っていても枠が描画されないため、**全タブのカード見た目を一括廃止**できる（後述パッチ）。
+3. **`AlarmTab` を縦並びUIに刷新**
+
+   * 「ゲーム内アラーム」「Discord」「Notion」を**セクション見出し＋フォーム**で縦並び。
+   * **「アラーム動作テスト」ボタン**を追加（約10秒後に一度だけ発火するダミー航海を投入 → 既存 `AlarmScheduler.Tick` によってトースト/チャット通知が出る想定）。この呼び出しは `Plugin` に**UIラッパー** `Ui_TestGameAlarm()` を追加し、そこから `_alarm.UpdateSnapshot()` を使います（Notionテストと同パターン）。
+4. **`DebugTab` を縦並びUIに刷新**
+
+   * 主要ボタンの**右側に説明文**を添える。
+   * 「詳細設定」は**分かりやすい日本語**に改名＋ツールチップ（例：
+
+     * 「SelectString抽出を使用」→「**メニューから艦名を素早く拾う（高速）**」
+     * 「SelectString詳細抽出を使用」→「**画面内テキストを総当りで拾う（低速/保険）**」 … など）
+5. **`Plugin.UI.cs` の文言微修正**
+
+   * `DrawSnapshotTable2()` 内の件数表示を「スナップショット:」→ **「航路情報:」** に変更。
+6. **Notion 設定**
+
+   * Alarmタブに **Token/DatabaseID/LatestOnly/Upsertキー方式/各プロパティ名** を再掲（`Plugin.UI.cs` の旧UI断片にある実装を移設）。
+7. **安全性**
+
+   * 既存の保存項目や挙動は維持。UIテキストのみ変更・並び替え。`Widgets.Card`の見た目だけ無効化し、**ロジックは不変**。
+
+---
+
+## 3) 受入条件（完成の定義）
+
+* 概要タブの上部に **「操作」「表示設定」「航路情報」** が**縦並び**で表示され、**英語は残らない**。
+  （「Manual (Memory)」→「**メモリから取得**」、「AutoCaptureOnWorkshopOpen」→「**工房を開いたら自動取得**」、「Appearance/Display」→「**表示設定**」等）
+* すべてのタブで **カード枠が消え**、フラットな見た目になる。
+* 「Snapshot」表記は UI 上で **「航路情報」** に統一。
+* アラームタブに **Notion一式の設定項目**が揃っている。
+* アラームタブに **「アラーム動作テスト」** ボタンがあり、押下後およそ数秒〜十数秒で\*\*実ゲーム内通知（既存アラーム経路）\*\*が1回発火する。
+* デバッグタブの**ボタン右に日本語の説明**が出る。
+* 詳細設定のラベルは**分かりやすい日本語**になっている（上記の例の通り）。
+
+---
+
+## 4) 実装パッチ
+
+> **適用順**の目安：①Widgets.cs → ②OverviewTab.cs → ③Plugin.UI.cs（メソッド追加＆表記変更） → ④AlarmTab.cs → ⑤DebugTab.cs
+
+### 4-1. `apps/XIVSubmarinesReturn/src/UI/Widgets.cs`（カード見た目の一括廃止）
+
+**目的**: Card を“枠なし”子領域に変更して、既存の呼び出しを壊さずカード風の見た目だけ消す。
+（他タブに `Widgets.Card` が残っていても縦並び見えになる）
+
+```diff
+--- a/apps/XIVSubmarinesReturn/src/UI/Widgets.cs
++++ b/apps/XIVSubmarinesReturn/src/UI/Widgets.cs
+@@
+-        // Simple card-like container using Child with border
++        // カード風コンテナ: 既定で「枠無し」の素通りコンテナに変更（カード見た目を全廃）
+         public readonly struct CardScope : IDisposable
+         {
+             public void Dispose() { try { ImGui.EndChild(); } catch { } }
+         }
+         public static CardScope Card(string id, Vector2? size = null)
+         {
+-            try { ImGui.BeginChild(id, size ?? new Vector2(0, 0), true); } catch { }
++            // 第3引数(HasBorder) を false に変更し、境界線を描画しない
++            try { ImGui.BeginChild(id, size ?? new Vector2(0, 0), false); } catch { }
+             return new CardScope();
+         }
+@@
+-        public static void SectionHeader(string text)
++        public static void SectionHeader(string text)
+         {
+-            try { ImGui.Text(text ?? string.Empty); ImGui.Separator(); } catch { }
++            // 見出しはそのまま。視認性のためセパレータは維持
++            try { ImGui.Text(text ?? string.Empty); ImGui.Separator(); } catch { }
+         }
 ```
-/Core/Sectors/SectorModels.cs
-/Core/Sectors/AliasIndex.cs
-/Core/Sectors/AliasIndex.json              // ローカル同梱の種データ（下にサンプルあり）
-/Core/Sectors/SectorResolver.cs
-/Commands/SectorCommands.cs
-/UI/SectorDebugWindow.cs                    // 任意（簡易UI）
-```
 
 ---
 
-## 🧩 実装詳細
+### 4-2. `apps/XIVSubmarinesReturn/src/UI/OverviewTab.cs`（**全面リライト：日本語＋縦並び**）
 
-### 0) 参照と名前空間（重要）
+**現状**: 2カラムのテーブル＋カードで「Operations／Appearance/Display／Snapshot」表示（英語ラベル）。
+**変更**: カードとグリッドを廃止し、縦並びで「操作」「表示設定」「航路情報」を日本語表示。
 
-* 生成シート型の名前空間は環境で異なることがあるため、**新Lumina(7.x)の `Lumina.Excel.Sheets` を優先**、ビルドエラー時は **`Lumina.Excel.GeneratedSheets` に切替**。
-  （例で**エイリアス using**を用意）
+> **置換**（ファイル全体を以下に置き換え）
 
 ```csharp
-// SectorModels.cs の先頭あたり
-using Dalamud.Plugin.Services;
-using Lumina.Excel; // 型は IDataManager.GetExcelSheet<T>() で返る ExcelSheet<T> を利用。:contentReference[oaicite:9]{index=9}
+using System;
+using System.Numerics;
+using Dalamud.Interface;
+using Dalamud.Interface.Components;
+using ImGui = Dalamud.Bindings.ImGui.ImGui;
 
-// 生成シートの名前空間は環境差があるため二択を用意（どちらか片方だけ有効にする）
-#if USE_LUMINA_SHEETS_NS
-using SubmarineExplorationRow = Lumina.Excel.Sheets.SubmarineExploration;   // 新系
-#else
-using SubmarineExplorationRow = Lumina.Excel.GeneratedSheets.SubmarineExploration; // 旧系
-#endif
-```
-
-> 参照根拠：`IDataManager.GetExcelSheet<T>` の署名/説明（Dalamud公式API）、LuminaのExcel仕様。([Dalamud][1], [Lumina][11])
-
----
-
-### 1) モデル
-
-```csharp
-// Core/Sectors/SectorModels.cs
-namespace Plugin.Core.Sectors;
-
-public sealed class SectorEntry {
-    public uint SectorId { get; init; }          // Excel RowId = セクター通し番号（XIVAPIの概念でもRowIdが主キー）:contentReference[oaicite:11]{index=11}
-    public string PlaceName { get; init; } = ""; // 地点表示名（例: "Concealed Bay"）
-    public string MapName { get; init; } = "";   // 海域（例: "Deep-sea Site"）
-    public string? Alias { get; set; }           // 文字エイリアス（A..Z, AA..）
-}
-
-public sealed class ResolveResult {
-    public SectorEntry? Match { get; init; }
-    public bool Ambiguous { get; init; }
-    public IReadOnlyList<SectorEntry>? Candidates { get; init; }
-    public string? Note { get; init; } // 例: "入力の 'P' と実エイリアス 'R' が不一致"
-}
-```
-
----
-
-### 2) ローカルJSONのエイリアス表（読み書き）
-
-```csharp
-// Core/Sectors/AliasIndex.cs
-using System.Text.Json;
-
-namespace Plugin.Core.Sectors;
-
-public sealed class AliasIndex {
-    // MapName -> (Alias -> SectorId)
-    public Dictionary<string, Dictionary<string, uint>> MapAliasToSector { get; init; } = new(StringComparer.OrdinalIgnoreCase);
-
-    public static AliasIndex LoadOrDefault(string jsonPath) {
-        if (File.Exists(jsonPath)) {
-            var json = File.ReadAllText(jsonPath);
-            var data = JsonSerializer.Deserialize<AliasIndex>(json) ?? new AliasIndex();
-            Normalise(data);
-            return data;
-        }
-        var d = new AliasIndex();
-        Normalise(d);
-        return d;
-    }
-
-    public void Save(string jsonPath) {
-        var json = JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true });
-        File.WriteAllText(jsonPath, json);
-    }
-
-    private static void Normalise(AliasIndex d) {
-        foreach (var (map, table) in d.MapAliasToSector.ToArray()) {
-            d.MapAliasToSector[map] = new Dictionary<string, uint>(table, StringComparer.OrdinalIgnoreCase);
-        }
-    }
-}
-```
-
-**`AliasIndex.json` の“種データ”サンプル**（**最低限**：溺没海の A..AD の並びだけ入れておく。*A=1…Z=26, AA=27, AB=28, AC=29, AD=30*）
-※これは**人力で作ってよい**／**後述のUI/ボタンで更新**。Mogship/GE/CGWで裏取り可能（参考）。([Mogship][10], [Gamer Escape][12], [Console Games Wiki][13])
-
-```json
+namespace XIVSubmarinesReturn.UI
 {
-  "MapAliasToSector": {
-    "Deep-sea Site": {
-      "A": 1, "B": 2, "C": 3, "D": 4, "E": 5, "F": 6, "G": 7, "H": 8, "I": 9, "J": 10,
-      "K": 11, "L": 12, "M": 13, "N": 14, "O": 15, "P": 16, "Q": 17, "R": 18, "S": 19, "T": 20,
-      "U": 21, "V": 22, "W": 23, "X": 24, "Y": 25, "Z": 26,
-      "AA": 27, "AB": 28, "AC": 29, "AD": 30
+    internal static class OverviewTab
+    {
+        internal static void Draw(Plugin p)
+        {
+            using var _ = Theme.UseDensity(p.Config.UiRowDensity);
+            try { ImGui.SetWindowFontScale(Math.Clamp(p.Config.UiFontScale, 0.9f, 1.3f)); } catch { }
+
+            // ── 操作 ─────────────────────────────────────────────
+            Widgets.SectionHeader("操作");
+            if (ImGui.Button("メモリから取得")) { p.Ui_DumpMemory(); }
+            ImGui.SameLine();
+            if (Widgets.IconButton(FontAwesomeIcon.Sync, "再読込")) { p.Ui_ReloadSnapshot(); }
+            ImGui.SameLine();
+            if (Widgets.IconButton(FontAwesomeIcon.CloudDownloadAlt, "Mogshipから別名/地図を取り込む")) { p.Ui_ImportFromMogship(); }
+            ImGui.SameLine();
+            if (Widgets.IconButton(FontAwesomeIcon.FolderOpen, "出力フォルダ(bridge)を開く")) { p.Ui_OpenBridgeFolder(); }
+            ImGui.SameLine();
+            if (Widgets.IconButton(FontAwesomeIcon.Cog, "設定フォルダを開く")) { p.Ui_OpenConfigFolder(); }
+
+            // 自動取得トグル（日本語化）
+            bool autoCap = p.Config.AutoCaptureOnWorkshopOpen;
+            ImGui.SameLine();
+            if (ImGui.Checkbox("工房を開いたら自動取得", ref autoCap)) { p.Config.AutoCaptureOnWorkshopOpen = autoCap; p.SaveConfig(); }
+
+            var status = p.Ui_GetUiStatus();
+            if (!string.IsNullOrEmpty(status)) { ImGui.SameLine(); ImGui.TextDisabled(status); }
+
+            // ── 表示設定 ─────────────────────────────────────────
+            Widgets.SectionHeader("表示設定");
+            int dens = p.Config.UiRowDensity == UiDensity.Compact ? 0 : 1;
+            if (ImGui.RadioButton("コンパクト", dens == 0)) { p.Config.UiRowDensity = UiDensity.Compact; p.SaveConfig(); dens = 0; }
+            ImGui.SameLine();
+            if (ImGui.RadioButton("ゆったり", dens == 1)) { p.Config.UiRowDensity = UiDensity.Cozy; p.SaveConfig(); dens = 1; }
+
+            var fscale = p.Config.UiFontScale;
+            if (ImGui.SliderFloat("フォント拡大率", ref fscale, 0.9f, 1.3f)) { p.Config.UiFontScale = fscale; p.SaveConfig(); }
+
+            var accStr = p.Config.AccentColor ?? "#1E90FF";
+            if (ImGui.InputText("アクセント色 (#RRGGBB)", ref accStr, 16)) { p.Config.AccentColor = accStr; p.SaveConfig(); }
+            try { var acc = Theme.ParseColor(p.Config.AccentColor, new Vector4(0.12f, 0.55f, 0.96f, 1f)); ImGui.SameLine(); ImGui.ColorButton("acc_prev", acc); } catch { }
+
+            ImGui.Separator();
+            ImGui.Text("ルート表示");
+            int rMode = p.Config.RouteDisplay switch
+            {
+                RouteDisplayMode.Letters => 0,
+                RouteDisplayMode.ShortIds => 1,
+                RouteDisplayMode.Raw => 2,
+                _ => 0
+            };
+            if (ImGui.RadioButton("レター", rMode == 0)) { p.Config.RouteDisplay = RouteDisplayMode.Letters; p.SaveConfig(); rMode = 0; }
+            ImGui.SameLine();
+            if (ImGui.RadioButton("P番号", rMode == 1)) { p.Config.RouteDisplay = RouteDisplayMode.ShortIds; p.SaveConfig(); rMode = 1; }
+            ImGui.SameLine();
+            if (ImGui.RadioButton("原文", rMode == 2)) { p.Config.RouteDisplay = RouteDisplayMode.Raw; p.SaveConfig(); rMode = 2; }
+
+            var mapHint = p.Config.SectorMapHint ?? string.Empty;
+            if (ImGui.InputText("マップ補助キー", ref mapHint, 64)) { p.Config.SectorMapHint = mapHint; p.SaveConfig(); }
+            ImGui.SameLine();
+            if (ImGui.Button("Alias JSON再読込"))
+            {
+                try { p.Ui_SetUiStatus(string.Empty); }
+                catch { }
+            }
+
+            // ── 航路情報（旧: Snapshot） ──────────────────────────
+            Widgets.SectionHeader("航路情報");
+            p.Ui_DrawSnapshotTable();
+        }
     }
-  }
 }
 ```
 
-> 参考：**Concealed Bay = Alias R / Map Deep‑sea Site**。R→18 の整合は外部資料でも目視確認できる（参考）。([FFXIV Wiki][7], [Eorzea World][9])
+> ※ 旧 `OverviewTab` で使っていた 2カラムの `ImGui.BeginTable` とカードは廃止しました。現状が英語＋カード形式であることはレビュー資料の該当コードで確認済みです。
 
 ---
 
-### 3) Excel からのインデックス作成（唯一のソース）
+### 4-3. `apps/XIVSubmarinesReturn/src/Plugin.UI.cs`（表記調整＆UIラッパー追加）
+
+**A. 件数表示「スナップショット:」→「航路情報:」に変更**（`DrawSnapshotTable2` 内）
+
+```diff
+--- a/apps/XIVSubmarinesReturn/src/Plugin.UI.cs
++++ b/apps/XIVSubmarinesReturn/src/Plugin.UI.cs
+@@
+-            ImGui.Text($"スナップショット: {( _uiSnapshot?.Items?.Count ?? 0)} 件");
++            ImGui.Text($"航路情報: {( _uiSnapshot?.Items?.Count ?? 0)} 件");
+```
+
+**B. UIラッパーを追加**（ゲーム内アラームテスト／Notion検証・テスト）
+
+> `partial class Plugin` の他の UI ラッパー群と同じ場所に追記してください。
 
 ```csharp
-// Core/Sectors/SectorResolver.cs
-using Dalamud.Plugin.Services;
-using Lumina.Excel;
-using System.Text.RegularExpressions;
-
-namespace Plugin.Core.Sectors;
-
-public sealed class SectorResolver {
-    private readonly Dictionary<uint, SectorEntry> byId = new();
-    private readonly Dictionary<(string map, uint id), SectorEntry> byMapAndId = new();
-    private readonly Dictionary<(string map, string alias), SectorEntry> byAlias = new();
-    private readonly AliasIndex aliasIndex;
-    private static readonly Regex CodeRx = new(@"^(?<letters>[A-Z]{1,2})?(?<digits>\d+)?$", RegexOptions.Compiled);
-
-    public SectorResolver(IDataManager data, AliasIndex aliasIndex) {
-        this.aliasIndex = aliasIndex;
-
-        // Excel から SubmarineExploration を列挙
-        var sheet = data.GetExcelSheet<SubmarineExplorationRow>(); // Excelの取得API。:contentReference[oaicite:14]{index=14}
-        foreach (var row in sheet) {
-            var id = row.RowId;                       // RowId は各シートの主キー（XIVAPIの概念とも一致）。:contentReference[oaicite:15]{index=15}
-            var name = row.Name?.ToString() ?? "";    // 生成型の列名は環境差あり。Name/PlaceName 等いずれかで取得
-            var map  = GetMapName(row);               // 下の補助関数でマップ名を取り出す
-            var entry = new SectorEntry { SectorId = id, PlaceName = name, MapName = map };
-            byId[id] = entry;
-            byMapAndId[(map, id)] = entry;
-        }
-
-        // JSON の Alias を紐付け（任意/存在する分だけ）
-        foreach (var (map, table) in aliasIndex.MapAliasToSector) {
-            foreach (var (alias, sectorId) in table) {
-                if (byMapAndId.TryGetValue((map, sectorId), out var e)) {
-                    e.Alias = alias.ToUpperInvariant();
-                    byAlias[(map, e.Alias)] = e;
+// ゲーム内アラームの動作テスト（約10秒後に1回）
+public void Ui_TestGameAlarm()
+{
+    try
+    {
+        var snap = new SubmarineSnapshot
+        {
+            PluginVersion = typeof(Plugin).Assembly.GetName().Version?.ToString(3) ?? "0.0.0",
+            Items = new System.Collections.Generic.List<SubmarineRecord>
+            {
+                new() {
+                    Name = "TEST", Slot = 1, Rank = 1,
+                    DurationMinutes = 0,
+                    EtaUnix = DateTimeOffset.UtcNow.AddSeconds(10).ToUnixTimeSeconds(),
+                    RouteKey = "Point-1"
                 }
             }
-        }
+        };
+        try { Services.EtaFormatter.Enrich(snap); } catch { }
+        _alarm?.UpdateSnapshot(snap);
+        _uiStatus = "アラームテストを登録しました（約10秒後に通知）";
     }
+    catch (Exception ex) { _uiStatus = $"アラームテスト失敗: {ex.Message}"; }
+}
 
-    public SectorEntry? FromSectorId(uint id) => byId.GetValueOrDefault(id);
+// Notion: DBプロパティ検証
+public void Ui_NotionEnsureProps()
+{
+    try
+    {
+        if (_notion != null)
+            _uiStatus = _notion.EnsureDatabasePropsAsync().GetAwaiter().GetResult();
+        else
+            _uiStatus = "Notion client not ready";
+    }
+    catch (Exception ex) { _uiStatus = $"Notion validate failed: {ex.Message}"; }
+}
 
-    public SectorEntry? FromAlias(string map, string alias) =>
-        byAlias.TryGetValue((map, alias.ToUpperInvariant()), out var e) ? e : null;
+// Notion: テスト送信（既存SelfTestと同じ考え方）
+public void Ui_NotionTestSend()
+{
+    try
+    {
+        var snap = new SubmarineSnapshot
+        {
+            PluginVersion = typeof(Plugin).Assembly.GetName().Version?.ToString(3) ?? "0.0.0",
+            Items = new System.Collections.Generic.List<SubmarineRecord>
+            {
+                new() { Name = "Submarine-1", Slot = 1, DurationMinutes = 10, RouteKey = "Point-1 - Point-2", Rank = 10,
+                        EtaUnix = DateTimeOffset.UtcNow.AddMinutes(2).ToUnixTimeSeconds() }
+            }
+        };
+        try { Services.EtaFormatter.Enrich(snap); } catch { }
+        _alarm?.UpdateSnapshot(snap);
+        _uiStatus = "Notion test enqueued";
+    }
+    catch (Exception ex) { _uiStatus = $"Notion test failed: {ex.Message}"; }
+}
+```
 
-    /// <summary> "P18" / "18" / "R" を解決。曖昧時は Candidates を返す。 </summary>
-    public ResolveResult ResolveCode(string code, string? mapHint = null) {
-        var m = CodeRx.Match(code.Trim().ToUpperInvariant());
-        if (!m.Success) return new ResolveResult { Ambiguous = true, Note = "コード形式不正" };
+---
 
-        var letters = m.Groups["letters"].Success ? m.Groups["letters"].Value : null;
-        var digitsStr = m.Groups["digits"].Success ? m.Groups["digits"].Value : null;
+### 4-4. `apps/XIVSubmarinesReturn/src/UI/AlarmTab.cs`（**縦並び＋テストボタン＋Notion再掲**）
 
-        // (1) digits を最優先（"18" or "P18" の "18"）
-        if (uint.TryParse(digitsStr, out var id)) {
-            var byIdHit = FromSectorId(id);
-            if (byIdHit != null) {
-                // 文字が与えられていて不一致なら注記
-                string? note = null;
-                if (!string.IsNullOrEmpty(letters) && !string.Equals(byIdHit.Alias, letters, StringComparison.OrdinalIgnoreCase)) {
-                    note = $"入力の別名 '{letters}' と実データの別名 '{byIdHit.Alias ?? "未定義"}' が不一致";
+**現状**: スクショでは Discord/Notion 等がカード配置（視認性が低い）。縦並びに再構成し、Notion の各種設定を確実に表示します。テストボタンも追加します（テストは上で追加した `Ui_TestGameAlarm()` を呼ぶ）。
+
+> **置換**（`AlarmTab.cs` が存在する場合は `Draw` を置換、無い場合は新規作成）
+
+```csharp
+using System;
+using Dalamud.Interface;
+using Dalamud.Interface.Components;
+using ImGui = Dalamud.Bindings.ImGui.ImGui;
+
+namespace XIVSubmarinesReturn.UI
+{
+    internal static class AlarmTab
+    {
+        internal static void Draw(Plugin p)
+        {
+            // ── ゲーム内アラーム ───────────────────────────────
+            Widgets.SectionHeader("ゲーム内アラーム");
+            bool aEnable = p.Config.GameAlarmEnabled;
+            if (ImGui.Checkbox("有効", ref aEnable)) { p.Config.GameAlarmEnabled = aEnable; p.SaveConfig(); }
+
+            // リード分
+            var leadText = string.Join(",", (p.Config.AlarmLeadMinutes ?? new System.Collections.Generic.List<int>()).ToArray());
+            if (ImGui.InputText("リード分（カンマ区切り例: 5,10,30,0）", ref leadText, 64)) { /* 変更は保存ボタンで反映 */ }
+            ImGui.SameLine();
+            if (ImGui.Button("保存"))
+            {
+                try
+                {
+                    var parts = (leadText ?? string.Empty).Split(new[] { ',', ' ', ';' }, StringSplitOptions.RemoveEmptyEntries);
+                    var list = new System.Collections.Generic.List<int>(parts.Length);
+                    foreach (var p2 in parts) if (int.TryParse(p2.Trim(), out var v)) list.Add(v);
+                    p.Config.AlarmLeadMinutes = list;
+                    p.SaveConfig();
+                    p.Ui_SetUiStatus("Alarm leads saved");
                 }
-                return new ResolveResult { Match = byIdHit, Note = note };
+                catch (Exception ex) { p.Ui_SetUiStatus($"Alarm save failed: {ex.Message}"); }
             }
-        }
 
-        // (2) letters のみで解決（Mapヒントが無ければ全Mapを走査）
-        if (!string.IsNullOrEmpty(letters)) {
-            if (!string.IsNullOrEmpty(mapHint)) {
-                var byAliasHit = FromAlias(mapHint, letters);
-                if (byAliasHit != null) return new ResolveResult { Match = byAliasHit };
-                return new ResolveResult { Ambiguous = true, Note = $"'{mapHint}' に別名 {letters} は見つかりません" };
+            if (ImGui.Button("アラーム動作テスト"))
+            {
+                p.Ui_TestGameAlarm();
             }
-            // 全Map探索（複数候補を返す）
-            var cands = byId.Values.Where(e => string.Equals(e.Alias, letters, StringComparison.OrdinalIgnoreCase)).ToList();
-            return cands.Count == 1
-                ? new ResolveResult { Match = cands[0] }
-                : new ResolveResult { Ambiguous = true, Candidates = cands, Note = "複数の海域で同じ別名が見つかりました" };
+            ImGui.SameLine(); ImGui.TextDisabled("約10秒後に1回だけ通知します。");
+
+            // ── Discord ────────────────────────────────────────
+            Widgets.SectionHeader("Discord");
+            bool dEnable = p.Config.DiscordEnabled;
+            if (ImGui.Checkbox("有効", ref dEnable)) { p.Config.DiscordEnabled = dEnable; p.SaveConfig(); }
+
+            bool latestOnly = p.Config.DiscordLatestOnly;
+            if (ImGui.Checkbox("最早(ETA最小)のみ", ref latestOnly)) { p.Config.DiscordLatestOnly = latestOnly; p.SaveConfig(); }
+
+            var wh = p.Config.DiscordWebhookUrl ?? string.Empty;
+            if (Widgets.MaskedInput("Webhook URL", ref wh, 512, ref UnsafeRef<bool>.False)) { p.Config.DiscordWebhookUrl = wh; p.SaveConfig(); }
+
+            bool useEmbeds = p.Config.DiscordUseEmbeds;
+            if (ImGui.Checkbox("埋め込み(リッチ表示)を使用", ref useEmbeds)) { p.Config.DiscordUseEmbeds = useEmbeds; p.SaveConfig(); }
+
+            // ── Notion ─────────────────────────────────────────
+            Widgets.SectionHeader("Notion");
+            bool nEnable = p.Config.NotionEnabled;
+            if (ImGui.Checkbox("有効", ref nEnable)) { p.Config.NotionEnabled = nEnable; p.SaveConfig(); }
+
+            var tok = p.Config.NotionToken ?? string.Empty;
+            if (Widgets.MaskedInput("Integration Token", ref tok, 256, ref UnsafeRef<bool>.False)) { p.Config.NotionToken = tok; p.SaveConfig(); }
+
+            var db = p.Config.NotionDatabaseId ?? string.Empty;
+            if (ImGui.InputText("Database ID", ref db, 256)) { p.Config.NotionDatabaseId = db; p.SaveConfig(); }
+
+            bool nLatest = p.Config.NotionLatestOnly;
+            if (ImGui.Checkbox("最早(ETA最小)のみ", ref nLatest)) { p.Config.NotionLatestOnly = nLatest; p.SaveConfig(); }
+
+            ImGui.Text("Upsertキー方式");
+            int modeVal = (int)p.Config.NotionKeyMode;
+            if (ImGui.RadioButton("スロット単位", modeVal == 0)) { p.Config.NotionKeyMode = NotionKeyMode.PerSlot; p.SaveConfig(); modeVal = 0; }
+            ImGui.SameLine();
+            if (ImGui.RadioButton("スロット+ルート", modeVal == 1)) { p.Config.NotionKeyMode = NotionKeyMode.PerSlotRoute; p.SaveConfig(); modeVal = 1; }
+            ImGui.SameLine();
+            if (ImGui.RadioButton("航海毎(レガシー)", modeVal == 2)) { p.Config.NotionKeyMode = NotionKeyMode.PerVoyage; p.SaveConfig(); modeVal = 2; }
+
+            // プロパティ名
+            var pn = p.Config.NotionPropName ?? "Name";
+            if (ImGui.InputText("Prop: Name (title)", ref pn, 64)) { p.Config.NotionPropName = pn; p.SaveConfig(); }
+            var ps = p.Config.NotionPropSlot ?? "Slot";
+            if (ImGui.InputText("Prop: Slot (number)", ref ps, 64)) { p.Config.NotionPropSlot = ps; p.SaveConfig(); }
+            var pe = p.Config.NotionPropEta ?? "ETA";
+            if (ImGui.InputText("Prop: ETA (date)", ref pe, 64)) { p.Config.NotionPropEta = pe; p.SaveConfig(); }
+            var pr = p.Config.NotionPropRoute ?? "Route";
+            if (ImGui.InputText("Prop: Route (rich_text)", ref pr, 64)) { p.Config.NotionPropRoute = pr; p.SaveConfig(); }
+            var prk = p.Config.NotionPropRank ?? "Rank";
+            if (ImGui.InputText("Prop: Rank (number)", ref prk, 64)) { p.Config.NotionPropRank = prk; p.SaveConfig(); }
+            var px = p.Config.NotionPropExtId ?? "ExtId";
+            if (ImGui.InputText("Prop: ExtId (rich_text)", ref px, 64)) { p.Config.NotionPropExtId = px; p.SaveConfig(); }
+            var prem = p.Config.NotionPropRemaining ?? "Remaining";
+            if (ImGui.InputText("Prop: Remaining (rich_text)", ref prem, 64)) { p.Config.NotionPropRemaining = prem; p.SaveConfig(); }
+            var pw = p.Config.NotionPropWorld ?? "World";
+            if (ImGui.InputText("Prop: World (rich_text)", ref pw, 64)) { p.Config.NotionPropWorld = pw; p.SaveConfig(); }
+            var pc = p.Config.NotionPropCharacter ?? "Character";
+            if (ImGui.InputText("Prop: Character (rich_text)", ref pc, 64)) { p.Config.NotionPropCharacter = pc; p.SaveConfig(); }
+            var pfc = p.Config.NotionPropFC ?? "FC";
+            if (ImGui.InputText("Prop: FC (rich_text)", ref pfc, 64)) { p.Config.NotionPropFC = pfc; p.SaveConfig(); }
+
+            if (ImGui.Button("プロパティ検証")) { p.Ui_NotionEnsureProps(); }
+            ImGui.SameLine(); ImGui.TextDisabled("Notion DBに必要なプロパティが無い場合に作成/補正します。");
+
+            if (ImGui.Button("Notionテスト送信")) { p.Ui_NotionTestSend(); }
+            ImGui.SameLine(); ImGui.TextDisabled("現在のスナップショット相当の情報を1件送信します。");
         }
 
-        // (3) どちらも無ければ曖昧
-        return new ResolveResult { Ambiguous = true, Note = "解決に必要な情報が不足" };
-    }
-
-    private static string GetMapName(SubmarineExplorationRow row) {
-        // 生成型の列名は環境差があるため、候補を順に試す
-        // 例: row.Map?.Value?.Name?.ToString() / row.Map?.ToString() / row.PlaceName* 系
-        var map = row.GetType().GetProperty("Map")?.GetValue(row);
-        if (map != null) {
-            // LazyRow<PlaceName> の可能性を考慮
-            var valProp = map.GetType().GetProperty("Value");
-            var value = valProp?.GetValue(map);
-            var nameProp = value?.GetType().GetProperty("Name");
-            var name = nameProp?.GetValue(value)?.ToString();
-            if (!string.IsNullOrEmpty(name)) return name!;
-        }
-        // フォールバック（無名）
-        return "Unknown Map";
+        // 小道具: MaskedInput の ref bool を簡便に渡すためのダミー
+        private static class UnsafeRef<T> where T : struct { public static T False = default; }
     }
 }
 ```
 
+> Notion/Discord/ゲーム内アラームの旧UI断片は `Plugin.UI.cs` に存在しているため、同等の項目を Alarm タブに縦並びで移設しています。
+
 ---
 
-### 4) スラッシュコマンド
+### 4-5. `apps/XIVSubmarinesReturn/src/UI/DebugTab.cs`（**縦並び＋日本語説明**）
+
+> **置換**（`DebugTab.cs` が存在する場合は `Draw` を置換、無い場合は新規作成）
 
 ```csharp
-// Commands/SectorCommands.cs
-using Dalamud.Game.Command;
-using Dalamud.Plugin;
-using Dalamud.Plugin.Services;
-using Plugin.Core.Sectors;
+using System;
+using System.Numerics;
+using Dalamud.Interface;
+using ImGui = Dalamud.Bindings.ImGui.ImGui;
 
-namespace Plugin.Commands;
+namespace XIVSubmarinesReturn.UI
+{
+    internal static class DebugTab
+    {
+        internal static void Draw(Plugin p)
+        {
+            // ── ログ/トレース ─────────────────────────────────
+            Widgets.SectionHeader("デバッグ");
+            bool dbg = p.Config.DebugLogging;
+            if (ImGui.Checkbox("デバッグログを有効化", ref dbg)) { p.Config.DebugLogging = dbg; p.SaveConfig(); }
 
-public sealed class SectorCommands : IDisposable {
-    private readonly IDalamudPluginInterface pi;
-    private readonly ICommandManager cmds;
-    private readonly SectorResolver resolver;
-
-    private const string Cmd = "/sv";
-
-    public SectorCommands(IDalamudPluginInterface pi, ICommandManager cmds, SectorResolver resolver) {
-        this.pi = pi; this.cmds = cmds; this.resolver = resolver;
-        cmds.AddHandler(Cmd, new CommandInfo(OnCmd) {
-            HelpMessage = "/sv test <code> 例: /sv test P18"
-        });
-    }
-
-    public void Dispose() => cmds.RemoveHandler(Cmd);
-
-    private void OnCmd(string cmd, string args) {
-        var parts = args.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        if (parts.Length >= 2 && parts[0].Equals("test", StringComparison.OrdinalIgnoreCase)) {
-            var code = parts[1];
-            var res = resolver.ResolveCode(code);
-            if (res.Match != null) {
-                var m = res.Match;
-                Chat($"[{code}] => Map={m.MapName}, Alias={m.Alias ?? "-"}, SectorId={m.SectorId}, Name={m.PlaceName}{(string.IsNullOrEmpty(res.Note) ? "" : $" ({res.Note})")}");
-            } else if (res.Ambiguous && res.Candidates is { Count: >0 }) {
-                Chat($"[{code}] は曖昧。候補: " + string.Join(" | ", res.Candidates.Select(c => $"{c.MapName}:{c.Alias}/{c.SectorId}:{c.PlaceName}")));
-            } else {
-                Chat($"[{code}] は解決できませんでした。{res.Note}");
+            if (ImGui.Button("トレースを開く"))
+            {
+                try { p.Ui_OpenTrace(); p.Ui_SetUiStatus("Trace opened"); }
+                catch (Exception ex) { p.Ui_SetUiStatus($"Open trace failed: {ex.Message}"); }
             }
-            return;
+            ImGui.SameLine(); ImGui.TextDisabled("xsr_debug.log を開きます。");
+
+            if (ImGui.Button("セルフテスト実行"))
+            {
+                try { p.GetType().GetMethod("CmdSelfTest", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?.Invoke(p, null); p.Ui_SetUiStatus("Self-test executed"); }
+                catch (Exception ex) { p.Ui_SetUiStatus($"Self-test failed: {ex.Message}"); }
+            }
+            ImGui.SameLine(); ImGui.TextDisabled("時間表記パーサなどの基本機能を確認します。");
+
+            // ── 操作（説明付き） ───────────────────────────────
+            Widgets.SectionHeader("操作");
+            if (ImGui.Button("メモリから取得"))
+            {
+                try { p.Ui_DumpMemory(); }
+                catch (Exception ex) { p.Ui_SetUiStatus($"Capture(Memory) failed: {ex.Message}"); }
+            }
+            ImGui.SameLine(); ImGui.TextDisabled("UIが読めない場合のフォールバックで、工房にいるときにメモリから直接取得します。");
+
+            if (ImGui.Button("アドオン探索"))
+            {
+                try { p.Ui_Probe(); }
+                catch (Exception ex) { p.Ui_SetUiStatus($"Probe failed: {ex.Message}"); }
+            }
+            ImGui.SameLine(); ImGui.TextDisabled("候補アドオンの存在/表示状態を一覧します。結果は下部に表示。");
+
+            if (ImGui.Button("フォルダを開く"))
+            {
+                try { p.Ui_OpenBridgeFolder(); p.Ui_SetUiStatus("Folder opened"); }
+                catch (Exception ex) { p.Ui_SetUiStatus($"Open failed: {ex.Message}"); }
+            }
+            ImGui.SameLine(); ImGui.TextDisabled("出力フォルダ(bridge)をエクスプローラで開きます。");
+
+            // ── 詳細設定（分かりやすい日本語） ─────────────────
+            Widgets.SectionHeader("詳細設定");
+            bool memFb = p.Config.UseMemoryFallback;
+            if (ImGui.Checkbox("UI取得に失敗したらメモリから取得（保険）", ref memFb))
+            { p.Config.UseMemoryFallback = memFb; p.SaveConfig(); }
+            ImGui.TextDisabled("UIが解析できない場合にメモリ直読へ切替えます。");
+
+            bool selExt = p.Config.UseSelectStringExtraction;
+            if (ImGui.Checkbox("メニュー(SelectString)から艦名を素早く拾う（高速）", ref selExt))
+            { p.Config.UseSelectStringExtraction = selExt; p.SaveConfig(); }
+            ImGui.TextDisabled("“艦を選ぶ”メニューの項目名から名前を抽出する軽量方式。");
+
+            bool selDet = p.Config.UseSelectStringDetailExtraction;
+            if (ImGui.Checkbox("画面内テキストを総当りで拾う（低速/保険）", ref selDet))
+            { p.Config.UseSelectStringDetailExtraction = selDet; p.SaveConfig(); }
+            ImGui.TextDisabled("見逃しを減らす代わりに重くなります。通常はOFF推奨。");
+
+            bool aggr = p.Config.AggressiveFallback;
+            if (ImGui.Checkbox("検出できないときに工房パネルも総当りで解析（強力）", ref aggr))
+            { p.Config.AggressiveFallback = aggr; p.SaveConfig(); }
+            ImGui.TextDisabled("テキスト行が少ない時に、関連パネル群を広く走査します。");
+
+            bool acceptDefaults = p.Config.AcceptDefaultNamesInMemory;
+            if (ImGui.Checkbox("艦名が Submarine-<番号> のままでもJSONに記録する", ref acceptDefaults))
+            { p.Config.AcceptDefaultNamesInMemory = acceptDefaults; p.SaveConfig(); }
+
+            // 探索結果の表示（既存の Ui_Probe と同等）
+            var probeText = p.Ui_GetProbeText();
+            if (!string.IsNullOrEmpty(probeText))
+            {
+                ImGui.Separator();
+                ImGui.Text("探索結果:");
+                ImGui.BeginChild("probe", new Vector2(480, 120), true);
+                ImGui.TextWrapped(probeText);
+                ImGui.EndChild();
+                if (ImGui.Button("結果をクリア")) { p.Ui_ClearProbeText(); }
+            }
         }
-        Chat("使い方: /sv test <code> 例: /sv test P18");
-    }
-
-    private void Chat(string msg) => pi.UiBuilder.AddNotification(msg, "SubmarineSectorResolver", Dalamud.Interface.Internal.Notifications.NotificationType.Info);
-}
-```
-
----
-
-### 5) 簡易UI（任意）
-
-```csharp
-// UI/SectorDebugWindow.cs
-using Dalamud.Interface.Windowing;
-using ImGuiNET;
-using Plugin.Core.Sectors;
-
-namespace Plugin.UI;
-
-public sealed class SectorDebugWindow : Window {
-    private readonly SectorResolver resolver;
-    private string input = "P18";
-
-    public SectorDebugWindow(SectorResolver resolver) : base("Sector Debug") {
-        this.resolver = resolver;
-        Size = new System.Numerics.Vector2(420, 240);
-        SizeCondition = ImGuiCond.FirstUseEver;
-    }
-
-    public override void Draw() {
-        ImGui.InputText("Code", ref input, 32);
-        if (ImGui.Button("Resolve")) {
-            var r = resolver.ResolveCode(input);
-            if (r.Match != null) {
-                var m = r.Match;
-                ImGui.TextWrapped($"Map={m.MapName}, Alias={m.Alias ?? "-"}, SectorId={m.SectorId}, Name={m.PlaceName}");
-                if (!string.IsNullOrEmpty(r.Note)) ImGui.TextColored(new(1, .8f, .2f, 1), r.Note);
-            } else if (r.Ambiguous && r.Candidates is { Count: > 0 }) {
-                ImGui.Text("Ambiguous:");
-                foreach (var c in r.Candidates) ImGui.BulletText($"{c.MapName}:{c.Alias}/{c.SectorId}:{c.PlaceName}");
-            } else ImGui.TextColored(new(1, .4f, .4f, 1), r.Note ?? "Failed");
-        }
     }
 }
 ```
 
 ---
 
-### 6) 既存 `Plugin.cs` への組み込み（概略）
+## 5) テスト観点
 
-```csharp
-// Plugin.cs（概略）
-using Dalamud.Plugin;
-using Dalamud.Plugin.Services;
-using Plugin.Commands;
-using Plugin.Core.Sectors;
-using Plugin.UI;
+* 概要タブ
 
-public sealed class Plugin : IDalamudPlugin {
-    public string Name => "YourPlugin";
+  * 英語表記が残っていない（ボタン・チェック・見出し・ツールチップを含む）。
+  * `航路情報` 見出しの下に、**既存のテーブル**が表示される（`SnapshotTable.Draw` 利用）。
+  * 件数ラベルが **「航路情報: n 件」** に変わっている。
+* アラームタブ
 
-    public Plugin(
-        IDalamudPluginInterface pi,
-        IDataManager data,
-        ICommandManager cmds
-    ) {
-        var aliasPath = Path.Combine(pi.ConfigDirectory.FullName, "AliasIndex.json");
-        var aliasIndex = AliasIndex.LoadOrDefault(aliasPath);
-        var resolver = new SectorResolver(data, aliasIndex);
+  * Notion の設定一式が見える。**プロパティ検証／テスト送信ボタン**が動作する（既存ルートを使用）。
+  * **アラーム動作テスト**押下後、約10秒でゲーム内通知（既存アラーム経路）1回のみ発火。
+* デバッグタブ
 
-        // Commands
-        _commands = new SectorCommands(pi, cmds, resolver);
+  * 各ボタン右に**日本語の説明文**が出ている。
+  * **詳細設定**のラベルが噛み砕かれた日本語になっている。
+* 全タブ
 
-        // （任意）UI
-        _window = new SectorDebugWindow(resolver);
-        pi.UiBuilder.Draw += _window.Draw;
-    }
-
-    private readonly SectorCommands _commands;
-    private readonly SectorDebugWindow _window;
-
-    public void Dispose() { /* … */ }
-}
-```
+  * カードの枠が出ない（`Widgets.Card`の枠無し化）。
 
 ---
 
-## 🔁 任意：ローカルJSONの更新ボタン（XIVAPI v2）
+## 6) 影響と後方互換
 
-* 設定UIに「**エイリアスJSON再生成**」ボタンを設置し、押された時だけ `HttpClient` で XIVAPI v2 を叩いて `SubmarineExploration` を取得 → `RowId / Map / Name` を読んで**人力で付けた Alias を検証 or 追記**するユーティリティを実装しても良いです。
-* XIVAPI v2 は**スキーマ／パッチのピン固定**に対応するため、\*\*常用ではなく“押した時だけ”\*\*でも十分安全に更新できます（“安定性・ピン固定”は公式Docに明記）。([xivapi][6])
-* なお、**ランタイム依存にしない**（ボタンを押さない限りネットワーク未使用）設計にしてください。
-
----
-
-## 🧪 受け入れ基準（Acceptance Criteria）
-
-1. `/sv test 18` → `SectorId=18` の行が解決され、`MapName=Deep‑sea Site, Alias=R（JSONがある場合）, PlaceName=Concealed Bay` 等が表示される。
-   （**参考**：Concealed Bay = Alias R / Map Deep‑sea Site。([FFXIV Wiki][7])）
-2. `/sv test P18` → `SectorId=18` が見つかる。入力の `P` と実エイリアス `R` が不一致なら**注記**が付く。
-3. `/sv test R` → **Deep‑sea Site の R(=18)** がヒットする（JSONに前掲のサンプルを入れている前提）。
-4. `AliasIndex.json` を削除しても、**少なくとも `MapName + PlaceName` の表示は成功**し、落ちない。
-5. （任意）設定UIの「再読み込み」で JSON を再読込できる。
-6. （任意）「JSON再生成」ボタンは押下時のみHTTPアクセスし、**押さない限り完全オフライン**。
+* ロジック・保存形式（`Configuration`）・JSON出力（`submarines.json`）には**非互換変更なし**。テーブルの中身・ETA演算・ルート表示方式も変更なし。
+* 「カード見た目廃止」は `Widgets.Card` の挙動変更で**一括で実現**。既存呼び出しはそのまま有効。
 
 ---
 
-## 📚 参考根拠（実装判断に関わる要点）
+## 7) 参考（現状確認の根拠）
 
-* **Dalamud API**：`IDataManager.GetExcelSheet<T>()` でゲーム内シートにアクセス（署名/解説）。([Dalamud][1])
-* **Lumina**：ゲームファイルからExcel（EXD/EXH）を読むライブラリ。基本/Excelの詳細は公式Docsに記載。([Lumina][2])
-* **Excel（EXL/EXH/EXD）仕様**：xiv.dev の説明。([XIV Dev][3])
-* **`SubmarineExploration` シート名**：外部SDK（xivapi-swift）のシート一覧に存在。([The Swift Package Index][5])
-* **RowId が主キー**：XIVAPI v2 の「Important Concepts」。([xivapi][14])
-* **コミュニティ裏取り**（表示上のAlias/Mapの組）
-
-  * GamerEscape/ConsoleGamesWiki：例「Concealed Bay = Alias R / Map Deep‑sea Site」。([Gamer Escape][8], [FFXIV Wiki][7])
-  * Mogship（Trip Plannerのラベル）：R=Concealed Bay, S=Deep‑sea Site 5, T=Purgatory …。([Mogship][10])
-* **XIVAPI v2**（安定化・ピン固定・全シートアクセス）：公式ドキュメント。([xivapi][6])
-* **Lumina.Excel の自動生成定義はゲームバージョンに追随**：NuGet 説明。([NuGet][4])
+* `OverviewTab.cs` に英語ラベルとカードレイアウト（Operations/Appearance/Display/Snapshot）が存在。
+* UI本体は `Plugin.UI.cs` → `OverviewTab/AlarmTab/DebugTab` を呼び出し。件数表示は `スナップショット:`。
+* スナップショット表の実装は `SnapshotTable.cs`（日本語ヘッダ、フィルタ等）。
+* 既存Notion/Discord/アラームUIの断片は `Plugin.UI.cs` の旧UI内に存在（再利用）。
+* 出力JSON（`submarines.json`）は現行のまま（ルート短縮表記`RouteShort`など）。
+* ルート抽出ログは `extract_log.txt`（UI変更に影響なし）。
 
 ---
 
-### メモ（Codex実装上の注意）
+### 付記
 
-* `SubmarineExplorationRow` の列名はビルド環境で若干差があります（`Name` / `PlaceName` / `Map` など）。上の `GetMapName` では**反射**で可能な限り拾うフォールバックを入れています。
-* JSON のエイリアスは**後から人力で足してもOK**。**無くても動く**設計が主眼です。
-* 外部サイトの対応表は「**目視検証の参考**」。\*\*プラグインのソース・オブ・トゥルースは常に Excel（=ゲーム内データ）\*\*です。
+* 「Alias JSON再読込」ボタンは Overview→表示設定 に残してありますが、必要に応じて `p._sectorResolver?.ReloadAliasIndex();` を呼ぶUIラッパーを追加しても構いません。
+* アラームのテストは **新規API追加不要**で、既存 `_alarm.UpdateSnapshot()` ＋ `Framework.Tick` を活用しています（Notionテストと同じパターンのため安全）。
 
-以上。
+---
 
-[1]: https://dalamud.dev/api/Dalamud.Plugin.Services/Interfaces/IDataManager/ "Interface IDataManager | Dalamud"
-[2]: https://lumina.xiv.dev/docs/guides/basic-usage.html "Setup & Basic Usage "
-[3]: https://xiv.dev/game-data/file-formats/excel "Excel | XIV Dev Wiki"
-[4]: https://www.nuget.org/packages/Lumina.Excel "
-        NuGet Gallery
-        \| Lumina.Excel 7.3.1
-    "
-[5]: https://swiftpackageindex.com/eisenhuth/xivapi-swift/v0.9.0/documentation/xivapi_swift/sheets/submarineexploration "xivapi-swift Documentation – Swift Package Index"
-[6]: https://v2.xivapi.com/docs/welcome/ "Welcome | xivapi"
-[7]: https://ffxiv.consolegameswiki.com/wiki/Concealed_Bay?utm_source=chatgpt.com "Concealed Bay - Final Fantasy XIV Online Wiki"
-[8]: https://ffxiv.gamerescape.com/wiki/Concealed_Bay?utm_source=chatgpt.com "Concealed Bay - Gamer Escape's Final Fantasy XIV ..."
-[9]: https://eorzeaworld.com/en/freecompany?utm_source=chatgpt.com "Eorzea World: Free Company"
-[10]: https://www.mogship.com/submarines/calculator?utm_source=chatgpt.com "Trip planner"
-[11]: https://lumina.xiv.dev/docs/guides/excel.html?utm_source=chatgpt.com "Advanced Excel"
-[12]: https://ffxiv.gamerescape.com/wiki/Category%3ASubaquatic_Deployment_Sector "Category:Subaquatic Deployment Sector - Gamer Escape's Final Fantasy XIV (FFXIV, FF14) wiki"
-[13]: https://consolegameswiki.com/wiki/Category%3ASubaquatic_Deployment_Sector "Category:Subaquatic Deployment Sector - Final Fantasy XIV Online Wiki - FFXIV / FF14 Online Community Wiki and Guide"
-[14]: https://v2.xivapi.com/docs/guides/concepts/ "Important Concepts | xivapi"
+以上。これらのパッチを適用すると、**英語表記の日本語化**、**カードの撤廃と縦並び化**、**「航路情報」見出しの明確化**、**Notion設定の再掲**、**ゲーム内アラームのテスト導線**、**デバッグ操作の説明充実**が満たされます。

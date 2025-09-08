@@ -71,33 +71,3 @@ tmp/
 # Obsidian vault (personal notes)
 /notes/
 
-# Editor/IDE local settings
-.idea/
-.vscode/
-
-# Generic temp/backup files
-**/*.tmp
-**/*.swp
-**/*.swo
-**/*~
-**/*.orig
-**/*.rej
-Desktop.ini
-
-# Python tooling caches
-.ruff_cache/
-.cache/
-
-# Coverage outputs
-.coverage*
-coverage/
-htmlcov/
-
-# Environment variants
-.env.*
-.env.local
-
-# Node.js
-**/node_modules/
-# XSR external artifacts (downloaded references for development)
-/apps/XIVSubmarinesReturn/_external/

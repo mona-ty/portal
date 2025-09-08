@@ -1,8 +1,9 @@
 <Project>
   <PropertyGroup>
     <!-- Set this to your local Dalamud dev Lib folder -->
-    <!-- Example: C:\\XIVLauncher\\dev\\Lib -->
-    <DalamudLibPath></DalamudLibPath>
+    <!-- 推奨: 環境変数 %AppData% を用いた相対指定（MSBuildでは $(APPDATA) を使用） -->
+    <!-- 例: %AppData%\XIVLauncher\addon\Hooks\dev → MSBuild表記: $(APPDATA)\XIVLauncher\addon\Hooks\dev -->
+    <DalamudLibPath>$(APPDATA)\XIVLauncher\addon\Hooks\dev</DalamudLibPath>
   </PropertyGroup>
 </Project>
 

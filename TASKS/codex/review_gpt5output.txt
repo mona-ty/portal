@@ -1,0 +1,304 @@
+以下は \*\*「UI 経由は使わず、メモリ直読に一本化」\*\*したうえで、**O>J で止まる現象を確実に解消**するための実装計画です。
+そのまま **codex** にコピーして使えるように、手順・差し替えコード・テスト項目をまとめました。
+（根拠として、現在の `Plugin.cs`/`EtaFormatter.cs`/出力JSON/抽出ログの状況を文中に引用しています）
+
+---
+
+````md
+# Task: Memory-only route reconstruction (no UI). Fix short route "O>J" to full "M>R>O>J>Z".
+
+## Why this is needed
+- 現状、出力JSONは `Note: "captured from memory"` で、`RouteKey` が常に `"Point-15 - Point-10"`（= O>J）に留まっている。UI からは取れていない。 :contentReference[oaicite:0]{index=0}
+- 抽出ログも `route: off=0x42,stride=1 -> [15,10]` と **2点のみ**が読み出されている。 :contentReference[oaicite:1]{index=1}
+- 実装は UI 取得 → 失敗時メモリの順で試行しているが、SelectString 系は常に不発であり（linesは艦名のみ）、結果はメモリ2点のみ→O>J表示のまま。 
+
+**方針**:  
+1) 取得は **メモリ一本化**。  
+2) メモリの `CurrentExplorationPoints` 読み出しを **正しい型/ストライド**で再実装（byte配列前提をやめる）。  
+3) それでも 1～2 点しか得られない環境向けに、**メモリ観測だけでフルルートを復元する「エッジ学習（隣接観測）」**を追加。  
+4) 復元できたフルルートはスロット別にキャッシュし、以後は **連続部分列（順/逆）一致**でもフル表示を維持。 :contentReference[oaicite:3]{index=3}
+
+---
+
+## Files to edit
+- `src/Plugin.cs`（メモリ直読・復元ロジック・コマンド）
+- `src/Configuration.cs`（学習エッジの保存）
+- （参考）`src/Services/EtaFormatter.cs` は現状のままでOK（RouteShort再生成は保持）。 :contentReference[oaicite:4]{index=4}
+
+---
+
+## 0) メモリ一本化（UI経路の無効化）
+
+### 0-1. `/xsr dump` を「メモリ直読のみ」に変更
+**Replace**: `OnCmdDump(...)` の先頭分岐  
+```csharp
+// OLD
+if (!TryCaptureFromConfiguredAddon(out var snap)) {
+    if (Config.UseMemoryFallback && TryCaptureFromMemory(out snap)) { }
+    else { ... }
+}
+
+// NEW (memory-only)
+if (!TryCaptureFromMemory(out var snap)) {
+    _log.Warning("Memory capture failed; no JSON written.");
+    _chat.Print("[Submarines] メモリ直読に失敗しました。工房に入り直してから /xsr dump を実行してください。");
+    return;
+}
+````
+
+（現状は TryCaptureFromConfiguredAddon を先に試してSelectStringで空振り→メモリへ、という流れ。UIは切る）&#x20;
+
+### 0-2. 自動取得（OnFrameworkUpdate）もメモリ優先へ
+
+**Replace**: `OnFrameworkUpdate` の `TryCaptureFromAddon(name, ...)` 呼び出しを削除し、**最初から `TryCaptureFromMemory`** を試す。&#x20;
+
+---
+
+## 1) メモリ構造読みの是正（byte→ushort stride想定）
+
+**原因の可能性**: `CurrentExplorationPoints` を `byte` で `j<5` ループしているため、実際が `ushort[5]` なら **奇数バイトが 0** になり `[15,10]` のように **半分しか読めない**。（ログも `off=0x42, stride=1` と出ており、ストライドが1固定）
+
+### 1-1. 読み出しコード差し替え
+
+`TryCaptureFromMemory` の `// Optional: route key` ブロックを以下に置換：
+
+```csharp
+// Read CurrentExplorationPoints as ushort[5] with stride=2; fall back to byte[5].
+var ptsU16 = new List<int>(5);
+var ptsU8  = new List<int>(5);
+try
+{
+    // 1) try as ushort[5]
+    for (int j = 0; j < 5; j++)
+    {
+        ushort v = 0;
+        try { v = *((ushort*)((byte*)s + 0x42 + j * 2)); } catch { v = 0; }
+        if (v >= 1 && v <= 255) ptsU16.Add(v);
+    }
+}
+catch { ptsU16.Clear(); }
+
+if (ptsU16.Count >= 3)
+{
+    memNums = ptsU16;
+    memReadKind = "u16x5";
+}
+else
+{
+    // 2) fallback: byte[5] (current implementation)
+    for (int j = 0; j < 5; j++)
+    {
+        byte v = 0;
+        try { v = *((byte*)((byte*)s + 0x42 + j)); } catch { v = 0; }
+        if (v >= 1 && v <= 255) ptsU8.Add(v);
+    }
+    memNums = ptsU8.ConvertAll(b => (int)b);
+    memReadKind = "u8x5";
+}
+XsrDebug.Log(Config, $"S{slot} route off=0x42 kind={memReadKind} -> [{string.Join(",", memNums)}]");
+```
+
+> 注: `0x42` は現行ログからのオフセット。実使用では `fixed (byte* rp = s->CurrentExplorationPoints)` から動的計算でも可。
+> これで **u16 読み取り**に成功すれば、一発で 3～5 個のポイントが取れる見込み。
+
+---
+
+## 2) それでも2点しか得られない場合に備えた「エッジ学習」
+
+UIを完全に切ると **初回は \[O,J] の2点**しか出ない環境が継続する可能性がある。
+このため、**メモリ観測だけでフルルートを再構成**するための「隣接エッジ学習」を追加する。
+
+### 2-1. 設定スキーマの追加（Configuration.cs）
+
+```csharp
+// slot -> from(point) -> to(point) -> count
+public Dictionary<int, Dictionary<int, Dictionary<int,int>>> RouteEdgeCounts { get; set; } = new();
+```
+
+### 2-2. エッジ学習の実装（Plugin.cs）
+
+```csharp
+private void LearnEdges(int slot, List<int> seq)
+{
+    try
+    {
+        if (seq == null || seq.Count < 2) return;
+        if (Config.RouteEdgeCounts == null)
+            Config.RouteEdgeCounts = new Dictionary<int, Dictionary<int, Dictionary<int,int>>>();
+        if (!Config.RouteEdgeCounts.TryGetValue(slot, out var fromMap))
+            Config.RouteEdgeCounts[slot] = fromMap = new();
+
+        for (int i = 1; i < seq.Count; i++)
+        {
+            var a = seq[i-1]; var b = seq[i];
+            if (!fromMap.TryGetValue(a, out var toMap)) fromMap[a] = toMap = new();
+            toMap.TryGetValue(b, out var c); toMap[b] = c + 1;
+        }
+        SaveConfig();
+    }
+    catch { }
+}
+```
+
+### 2-3. エッジからの経路再構成（Plugin.cs）
+
+```csharp
+private List<int>? TryReconstructFromEdges(int slot, List<int> mem, int maxLen = 5)
+{
+    try
+    {
+        if (Config.RouteEdgeCounts == null || !Config.RouteEdgeCounts.TryGetValue(slot, out var fromMap))
+            return null;
+
+        // 逆方向マップも作る
+        var inDeg = new Dictionary<int,int>();
+        var outDeg = new Dictionary<int,int>();
+        var nextOf = new Dictionary<int,int>(); // 「最頻」遷移のみ採用（分岐は不採用）
+
+        foreach (var (from,toMap) in fromMap)
+        {
+            if (toMap.Count == 0) continue;
+            var best = toMap.OrderByDescending(kv => kv.Value).First().Key;
+            nextOf[from] = best;
+            outDeg[from] = 1;
+            inDeg[best] = inDeg.TryGetValue(best, out var v) ? v + 1 : 1;
+            if (!inDeg.ContainsKey(from)) inDeg.TryAdd(from, 0);
+            if (!outDeg.ContainsKey(best)) outDeg.TryAdd(best, 0);
+        }
+
+        if (nextOf.Count == 0) return null;
+
+        // ヘッド候補 = inDeg==0 のノード（無ければ mem[0] を起点）
+        int head = -1;
+        foreach (var kv in inDeg) if (kv.Value == 0) { head = kv.Key; break; }
+        if (head < 0 && mem.Count > 0) head = mem[0];
+        if (head < 0) head = nextOf.Keys.First();
+
+        // head から1本の鎖を伸ばす（ループ回避）
+        var chain = new List<int>(maxLen);
+        var seen = new HashSet<int>();
+        int cur = head;
+        while (chain.Count < maxLen && cur != 0 && !seen.Contains(cur))
+        {
+            chain.Add(cur); seen.Add(cur);
+            if (!nextOf.TryGetValue(cur, out var nx)) break;
+            cur = nx;
+        }
+        if (chain.Count == 0) return null;
+
+        // mem が chain の連続部分列に含まれることを要求
+        bool containsMem = mem.Count == 0 || ContainsSubseq(chain, mem) || ContainsSubseq(chain, Reverse(mem));
+        if (!containsMem) return null;
+
+        return chain;
+    }
+    catch { return null; }
+
+    static bool ContainsSubseq(List<int> sup, List<int> sub)
+    {
+        if (sub == null || sub.Count == 0 || sup.Count < sub.Count) return false;
+        for (int i = 0; i <= sup.Count - sub.Count; i++)
+        {
+            bool ok = true;
+            for (int j = 0; j < sub.Count; j++) if (sup[i + j] != sub[j]) { ok = false; break; }
+            if (ok) return true;
+        }
+        return false;
+    }
+    static List<int> Reverse(List<int> a) { var r = new List<int>(a); r.Reverse(); return r; }
+}
+```
+
+### 2-4. 採用フローの更新（Plugin.cs / TryCaptureFromMemory）
+
+* 既存の **サフィックス一致**／**連続部分列一致**（キャッシュへの照合）はそのまま残す。&#x20;
+* 追加で、**エッジ再構成**を試す：
+
+```csharp
+// memNums: メモリ読み出し（1〜5点）
+// 1) まず学習
+LearnEdges(slot, memNums);
+
+// 2) 従来: フル(>=3)なら保存、1-2点は cache(LastRouteBySlot) と連続部分列で照合
+//    （現行コードを維持） :contentReference[oaicite:9]{index=9}
+
+// 3) 依然として短い場合、エッジ学習から再構成
+if (routeNumbers.Count < 3)
+{
+    var recon = TryReconstructFromEdges(slot, memNums, 5);
+    if (recon != null && recon.Count >= 3)
+    {
+        routeNumbers = recon;
+        adoptedCache = true; reason = "edges";
+        SaveCache(slot, routeNumbers); // フルだけ保存
+    }
+}
+```
+
+※ ログには `reason=edges` を出し、採用経路を可視化する。
+
+---
+
+## 3) 文字列表記の一貫性維持
+
+* `rec.RouteKey = BuildRouteKeyFromNumbers(routeNumbers);`
+* `rec.Extra["RouteShort"] = BuildRouteShortFromNumbers(routeNumbers);`（既存実装を流用）
+
+---
+
+## 4) 既存の UI 関連コードは残すが「未使用」に
+
+* `TryCaptureFromConfiguredAddon`/`TryCaptureFromAddon`/`EnrichFromWorkshopPanels` は削除不要。将来の再有効化に備え、呼び出しのみ止める。&#x20;
+
+---
+
+## 5) テレメトリ/ログ
+
+* メモリ読み時: `kind=u16x5|u8x5`, `mem=[..]`, `cache=[..]`, `adopted=mem|cache`, `reason=mem|subseq|reverse-subseq|none|edges`, `final=[..]` を出力。
+  （現行のログ出力に `kind`/`edges` を追加）&#x20;
+
+---
+
+## 6) Acceptance Criteria
+
+1. **u16 読み出しが有効な環境**では、1回の `/xsr dump` で **3〜5点**を得て `RouteKey` が **M>R>O>J>Z**（例: 13-18-15-10-26）相当に復元される。
+   JSON に `"captured from memory"` とありつつ `RouteShort` が **M>R>O>J>Z** になること。&#x20;
+2. **依然2点しか得られない環境**でも、数回の `/xsr dump` で観測された連続ペア（例: \[13,18], \[18,15], \[15,10], \[10,26]）が `RouteEdgeCounts` に蓄積され、
+   再構成（`reason=edges`）により **3点以上**のフルルートが表示される。
+3. フルルートが確定した後は、以降メモリが `[15,10]` など **中間部分**しか返さなくても、
+   **連続部分列一致**（順/逆）で常にフル表示を維持する。&#x20;
+4. Discord／ETA の付加情報は従来通り（`EtaLocalFull` など）に出力される。
+
+---
+
+## 7) Manual Test Plan
+
+* **Case A (u16 成功)**: 工房内で `/xsr dump` → ログ `kind=u16x5`、`final=[13,18,15,10,26]`、UI/JSONのルートが **M>R>O>J>Z**。
+* **Case B (u8のみ)**: 複数回 `/xsr dump` を実施し、時刻差で観測ペアが増える。
+  いずれかの回で `reason=edges` により `final` が 3 点以上となり、以降は `LastRouteBySlot` 経由で安定的にフル表示。
+* **Regression**: UI を開かずとも JSON 出力ができ、通知の本文に `EtaLocalFull` が含まれること。
+
+---
+
+## Notes
+
+* 本パッチは **UI 抽出に一切依存しない**。
+* `0x42` オフセットはログからの暫定値。将来的に `s->CurrentExplorationPoints` の型が明確であれば `sizeof` と `fixed` から動的算出して置換可。
+* Edge 学習は **各スロット独立**。誤学習抑止のため、`SaveCache` は **3点以上のフルルート**のみ保存する既存方針を踏襲。&#x20;
+
+```
+
+---
+
+### 参考（現状の根拠）
+- 現在の JSON: `captured from memory` かつ `RouteKey="Point-15 - Point-10"`（= O>J）。 :contentReference[oaicite:19]{index=19}  
+- 抽出ログ: `route: off=0x42,stride=1 -> [15,10]`（2点のみ）。 :contentReference[oaicite:20]{index=20}  
+- 現実装は UI 抽出→失敗時メモリへ（SelectString は艦名のみでルート取得は不可）。   
+- ルート短縮のまま止まる問題に対し、既に **連続部分列一致**や `RouteShort` 生成などの土台は実装済み。今回、**キャッシュの起点（フルルート獲得）**をメモリだけで達成するため、**u16読取**と**エッジ学習**を追加する。 :contentReference[oaicite:22]{index=22}
+
+---
+
+この計画なら、**UI 取得が常に失敗する環境**でも、  
+- まず **メモリの正読（u16対応）**で一発復旧を狙い、  
+- それでもダメな場合は **メモリ観測の蓄積(Edge学習)** だけで **M>R>O>J>Z** へ到達できます。
+```

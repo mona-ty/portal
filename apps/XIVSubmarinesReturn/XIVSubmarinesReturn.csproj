@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project Sdk="Microsoft.NET.Sdk">
   <Import Project="Local.props" Condition="Exists('Local.props')" />
   <PropertyGroup>
@@ -16,12 +16,10 @@
     <FileVersion>0.1.1.0</FileVersion>
     <Version>0.1.1</Version>
   </PropertyGroup>
-
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
     <Optimize>true</Optimize>
     <DefineConstants>RELEASE</DefineConstants>
   </PropertyGroup>
-
   <!-- Dalamud local references (set via Local.props: DalamudLibPath) -->
   <ItemGroup Condition=" '$(DalamudLibPath)' != '' ">
     <Reference Include="Dalamud">
@@ -46,13 +44,14 @@
       <Private>false</Private>
     </Reference>
   </ItemGroup>
-
   <ItemGroup>
     <None Include="manifest.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Include="icon.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
-
   <!-- Embed manifest so DLL直指定でも読み込めるようにする -->
   <ItemGroup>
     <!-- 埋め込みマニフェスト: Dalamud が "manifest.json" を直接検索できるよう LogicalName を固定 -->
@@ -61,7 +60,6 @@
     </EmbeddedResource>
     <!-- 互換目的: plugin.json も同様に固定名で埋め込み（実際の読み取りは manifest.json が使用される） -->
   </ItemGroup>
-
   <ItemGroup>
     <Compile Include="src\Plugin.cs" />
     <Compile Include="src\Configuration.cs" />
@@ -76,9 +74,22 @@
     <Compile Include="src\Services\GoogleCalendarClient.cs" />
     <Compile Include="src\Services\XsrDebug.cs" />
     <Compile Include="src\Services\NotionClient.cs" />
+    <Compile Include="src\UI\Theme.cs" />
+    <Compile Include="src\UI\Widgets.cs" />
+    <Compile Include="src\UI\SnapshotTable.cs" />
+    <Compile Include="src\UI\AlarmTab.cs" />
+    <Compile Include="src\UI\DebugTab.cs" />
+    <Compile Include="src\UI\OverviewTab.cs" />
+    <Compile Include="src\Sectors\SectorModels.cs" />
+    <Compile Include="src\Sectors\AliasIndex.cs" />
+    <Compile Include="src\Sectors\SectorResolver.cs" />
+    <Compile Include="src\Sectors\MogshipImporter.cs" />
+    <Compile Include="src\Commands\SectorCommands.cs" />
   </ItemGroup>
-
   <ItemGroup>
     <PackageReference Include="DalamudPackager" Version="13.1.0" />
   </ItemGroup>
+  <PropertyGroup>
+    <SkipPack>true</SkipPack>
+  </PropertyGroup>
 </Project>

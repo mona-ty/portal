@@ -44,8 +44,8 @@ namespace XIVSubmarinesReturn.Services
                 {
                     var fields = items.Take(25).Select(it => new
                     {
-                        name = (it.Slot.HasValue ? $"S{it.Slot.Value} " : string.Empty) + (it.Name ?? string.Empty),
-                        value = BuildSnapshotLine(it),
+                        name = (it.Name ?? string.Empty),
+                        value = BuildSnapshotLine2(it),
                         inline = false
                     }).ToArray();
                     var payload = new
@@ -61,7 +61,7 @@ namespace XIVSubmarinesReturn.Services
                 {
                     foreach (var it in items)
                     {
-                        var msg = BuildSnapshotLine(it);
+                        var msg = BuildSnapshotLine2(it);
                         await PostAsync(url, msg, ct).ConfigureAwait(false);
                     }
                 }
@@ -73,7 +73,7 @@ namespace XIVSubmarinesReturn.Services
             }
         }
 
-        public async Task NotifyAlarmAsync(SubmarineRecord rec, int leadMinutes, CancellationToken ct = default)
+                public async Task NotifyAlarmAsync(SubmarineRecord rec, int leadMinutes, CancellationToken ct = default)
         {
             try
             {
@@ -81,7 +81,18 @@ namespace XIVSubmarinesReturn.Services
                 var url = _cfg.DiscordWebhookUrl;
                 if (string.IsNullOrWhiteSpace(url)) return;
                 if (rec == null) return;
-                var msg = $"[Sub Alarm] {(rec.Slot.HasValue ? $"S{rec.Slot.Value} " : string.Empty)}{rec.Name} ETA {(rec.Extra != null && rec.Extra.TryGetValue("EtaLocal", out var t) ? t : "?")} (残 {leadMinutes}分) {(rec.Extra != null && rec.Extra.TryGetValue("RouteShort", out var r) ? r : rec.RouteKey)}";
+
+                string etaFull;
+                try
+                {
+                    if (rec.Extra != null && rec.Extra.TryGetValue("EtaLocalFull", out var tfull) && !string.IsNullOrWhiteSpace(tfull)) etaFull = tfull;
+                    else if (rec.EtaUnix.HasValue && rec.EtaUnix.Value > 0) etaFull = DateTimeOffset.FromUnixTimeSeconds(rec.EtaUnix.Value).ToLocalTime().ToString("yyyy/M/d HH:mm");
+                    else etaFull = (rec.Extra != null && rec.Extra.TryGetValue("EtaLocal", out var tshort)) ? (tshort ?? "?") : "?";
+                }
+                catch { etaFull = "?"; }
+
+                var routeText = (rec.Extra != null && rec.Extra.TryGetValue("RouteShort", out var r)) ? r : rec.RouteKey;
+                var msg = $"[Sub Alarm] {rec.Name} ETA {etaFull} (残 {leadMinutes}分) {routeText}";
                 await PostAsync(url, msg, ct).ConfigureAwait(false);
             }
             catch (Exception ex)
@@ -89,9 +100,7 @@ namespace XIVSubmarinesReturn.Services
                 _log.Warning(ex, "Discord NotifyAlarm failed");
                 XsrDebug.Log(_cfg, "Discord NotifyAlarm failed", ex);
             }
-        }
-
-        private static SubmarineRecord? GetNearest(SubmarineSnapshot snap)
+        }private static SubmarineRecord? GetNearest(SubmarineSnapshot snap)
         {
             try
             {
@@ -103,7 +112,26 @@ namespace XIVSubmarinesReturn.Services
             catch { return snap.Items.FirstOrDefault(); }
         }
 
-        private static string BuildSnapshotLine(SubmarineRecord it)
+        // Extended line builder that prefers full local date-time for ETA
+                        // Extended line builder that prefers full local date-time for ETA
+        private static string BuildSnapshotLine2(SubmarineRecord it)
+        {
+            string eta = string.Empty;
+            try
+            {
+                if (it.Extra != null && it.Extra.TryGetValue("EtaLocalFull", out var tFull) && !string.IsNullOrWhiteSpace(tFull))
+                    eta = tFull;
+                else if (it.EtaUnix.HasValue && it.EtaUnix.Value > 0)
+                    eta = DateTimeOffset.FromUnixTimeSeconds(it.EtaUnix.Value).ToLocalTime().ToString("yyyy/M/d HH:mm");
+                else if (it.Extra != null && it.Extra.TryGetValue("EtaLocal", out var tShort))
+                    eta = tShort ?? string.Empty;
+            }
+            catch { }
+
+            var rem = it.Extra != null && it.Extra.TryGetValue("RemainingText", out var rm) ? rm : string.Empty;
+            var rt = it.Extra != null && it.Extra.TryGetValue("RouteShort", out var r) ? r : it.RouteKey;
+            return  $"[Sub] {eta} (残 {rem}) {rt}".Trim(); 
+        }private static string BuildSnapshotLine(SubmarineRecord it)
         {
             var eta = it.Extra != null && it.Extra.TryGetValue("EtaLocal", out var t) ? t : string.Empty;
             var rem = it.Extra != null && it.Extra.TryGetValue("RemainingText", out var rm) ? rm : string.Empty;
@@ -203,3 +231,5 @@ namespace XIVSubmarinesReturn.Services
         }
     }
 }
+
+

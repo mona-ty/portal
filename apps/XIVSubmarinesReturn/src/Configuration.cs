@@ -7,6 +7,8 @@ public enum CalendarMode { All, Latest }
 
 public enum RouteDisplayMode { Letters, ShortIds, Raw }
 
+public enum UiDensity { Compact, Cozy }
+
 public enum NotionKeyMode
 {
     // 同一スロットで同一ページに更新（推奨）
@@ -22,6 +24,9 @@ public class Configuration : IPluginConfiguration
     public int Version { get; set; } = 1;
 
     public bool AutoCaptureOnWorkshopOpen { get; set; } = false;
+
+    // 設定ウィンドウの自動リサイズ（縦横）。既定で有効。
+    public bool AutoResizeWindow { get; set; } = true;
 
     // 取得対象のアドオン名（既定は推測名、必要に応じて変更してください）
     public string AddonName { get; set; } = "SelectString";
@@ -50,6 +55,20 @@ public class Configuration : IPluginConfiguration
     // ルート表示モード（学習済みレター > P番号 > 原文）
     public RouteDisplayMode RouteDisplay { get; set; } = RouteDisplayMode.Letters;
 
+    // セクター解決用のMapヒント（例: Deep-sea Site = 溺没海）
+    public string SectorMapHint { get; set; } = "Deep-sea Site";
+
+    // UI 外観設定
+    public UiDensity UiRowDensity { get; set; } = UiDensity.Compact;
+    public float UiFontScale { get; set; } = 1.0f; // 0.9..1.2 推奨
+    public int HighlightSoonMins { get; set; } = 10; // ETAがこの分数以下で強調
+    public string AccentColor { get; set; } = "#1E90FF"; // 青(DodgerBlue)
+
+    // テーブル状態（必要に応じて保存）
+    public int TableSortField { get; set; } = 3; // 0=Name 1=Slot 2=Rank 3=ETA
+    public bool TableSortAsc { get; set; } = true;
+    public string TableFilterText { get; set; } = string.Empty;
+
     // Discord embeds (duplicated below for grouping – keep single definition)
     // public bool DiscordUseEmbeds { get; set; } = false;
 
@@ -74,6 +93,9 @@ public class Configuration : IPluginConfiguration
 
     // Debug logging
     public bool DebugLogging { get; set; } = true;
+
+    // ルートキャッシュ（メモリから得られるポイントが不足する場合の補完に使用。キー=スロット番号）
+    public System.Collections.Generic.Dictionary<int, string> LastRouteBySlot { get; set; } = new();
 
     // Notion settings
     public bool NotionEnabled { get; set; } = false;
