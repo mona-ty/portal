@@ -11,31 +11,18 @@ from PIL import Image, ImageOps, ImageFilter
 
 # 正常な日本語表記のパターン（全角/半角や空白の揺れに許容）
 SUB_LINE_PATTERNS = [
-    # 例: Name [Rank89] [残り 1時間 49分]（Rank/残り側の括弧は全角/半角どちらも可）
+    # 例: 山甲号 [Rank89] [帰還: 残り 1時間 49分]
     re.compile(
-        r"^\\s*(?P<name>[\\w\\-\\u3000-\\u30FF\\u4E00-\\u9FFF]+)\\s*"
-        r"(?:(?:\\[|［)\\s*Rank\\d+\\s*(?:\\]|］))?\\s*"  # optional [Rank..] or ［Rank..］
-        r"(?:(?:\\[|［).*?(?:\\]|］)\\s*)*"             # optional extra bracket blocks before 残り
-        r"(?:\\[|［)?\\s*残り\\s*(?P<hours>\\d+)\\s*時間\\s*(?P<minutes>\\d+)\\s*分\\s*(?:\\]|］)?",
+        r"^\s*(?P<name>[\w\-\u3000-\u30FF\u4E00-\u9FFF]+)\s*\[Rank\d+\]\s*\[?\s*帰還\s*[:：]?\s*約?\s*残り\s*(?P<hours>\d+)\s*時間\s*(?P<minutes>\d+)\s*分\s*\]?",
         re.MULTILINE,
     ),
-    # 例: Name [Rank89] [残り 49分]
+    # 例: 山甲号 [Rank89] [帰還: 残り 49分]
     re.compile(
-        r"^\\s*(?P<name>[\\w\\-\\u3000-\\u30FF\\u4E00-\\u9FFF]+)\\s*"
-        r"(?:(?:\\[|［)\\s*Rank\\d+\\s*(?:\\]|］))?\\s*"
-        r"(?:(?:\\[|［).*?(?:\\]|］)\\s*)*"
-        r"(?:\\[|［)?\\s*残り\\s*(?P<minutes>\\d+)\\s*分\\s*(?:\\]|］)?",
-        re.MULTILINE,
-    ),
-    # 例: Name [Rank80] [残り 1:05]（HH:MM / 全角コロンは normalize で半角化）
-    re.compile(
-        r"^\\s*(?P<name>[\\w\\-\\u3000-\\u30FF\\u4E00-\\u9FFF]+)\\s*"
-        r"(?:(?:\\[|［)\\s*Rank\\d+\\s*(?:\\]|］))?\\s*"
-        r"(?:(?:\\[|［).*?(?:\\]|］)\\s*)*"
-        r"(?:\\[|［)?\\s*残り\\s*(?P<hours>\\d{1,2})\\s*:\\s*(?P<minutes>\\d{2})\\s*(?:\\]|］)?",
+        r"^\s*(?P<name>[\w\-\u3000-\u30FF\u4E00-\u9FFF]+)\s*\[Rank\d+\]\s*\[?\s*帰還\s*[:：]?\s*約?\s*残り\s*(?P<minutes>\d+)\s*分\s*\]?",
         re.MULTILINE,
     ),
 ]
+
 
 @dataclass
 class SubmarineETA:
