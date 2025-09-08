@@ -1,7 +1,7 @@
 {
   "Name": "XIV Submarines Return",
   "InternalName": "XIVSubmarinesReturn",
-  "Author": "Apps Lab",
+  "Author": "Mona Tierra",
   "Punchline": "Submarine list -> JSON bridge",
   "Description": "Captures company workshop submarine list and writes JSON for external tools.",
   "ApplicableVersion": "any",
@@ -10,4 +10,6 @@
   "AssemblyVersion": "0.1.1",
   "Tags": ["submarine", "workshop", "utilities"],
   "IconUrl": "icon.png"
+  ,
+  "ImageUrls": ["icon.png"]
 }

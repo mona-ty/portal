@@ -5,5 +5,9 @@
     <!-- 例: %AppData%\XIVLauncher\addon\Hooks\dev → MSBuild表記: $(APPDATA)\XIVLauncher\addon\Hooks\dev -->
     <DalamudLibPath>$(APPDATA)\XIVLauncher\addon\Hooks\dev</DalamudLibPath>
   </PropertyGroup>
+  <PropertyGroup>
+    <!-- Optional: devPlugins deploy target. If empty, copy step is skipped. -->
+    <!-- Example: $(APPDATA)\XIVLauncher\devPlugins\XIVSubmarinesReturn -->
+    <DevPluginsDir>$(APPDATA)\XIVLauncher\devPlugins\XIVSubmarinesReturn</DevPluginsDir>
+  </PropertyGroup>
 </Project>
-
