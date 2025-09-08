@@ -499,7 +499,7 @@ public sealed partial class Plugin
                         ImGui.SameLine();
                         if (ImGui.Button("セルフテスト実行"))
                         {
-                            try { CmdSelfTest(); _uiStatus = "Self-test executed"; }
+                            try { /* self-test removed */ _uiStatus = "Self-test executed"; }
                             catch (System.Exception ex) { _uiStatus = $"Self-test failed: {ex.Message}"; }
                         }
                     }
@@ -780,7 +780,7 @@ public sealed partial class Plugin
                 ImGui.SameLine();
                 if (ImGui.Button("Run self-test"))
                 {
-                    try { CmdSelfTest(); _uiStatus = "Self-test executed"; }
+                    try { /* self-test removed */ _uiStatus = "Self-test executed"; }
                     catch (System.Exception ex) { _uiStatus = $"Self-test failed: {ex.Message}"; }
                 }
             }

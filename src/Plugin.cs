@@ -164,7 +164,7 @@ public sealed partial class Plugin : IDalamudPlugin
                 return;
                 }
             }
-            try { TrySetIdentity(snap); } catch { }
+            // Attach identity once (if available)
             try { TrySetIdentity(snap); } catch { }
             try { EtaFormatter.Enrich(snap); } catch { }
             try { TryAdoptPreviousRoutes(snap); } catch { }
@@ -447,9 +447,10 @@ public sealed partial class Plugin : IDalamudPlugin
             case "dumpstage":
                 CmdDumpStage();
                 break;
-            case "selftest":
-                CmdSelfTest();
-                break;
+            // removed: selftest command
+            // case "selftest":
+            //     CmdSelfTest();
+            //     break;
             default:
                 _chat.Print("[Submarines] Unknown subcommand. Try: /xsr help");
                 break;
@@ -860,9 +861,10 @@ public sealed partial class Plugin : IDalamudPlugin
                 case "dumpstage":
                     CmdDumpStage();
                     break;
-                case "selftest":
-                    CmdSelfTest();
-                    break;
+            // removed: selftest command
+            // case "selftest":
+            //     CmdSelfTest();
+            //     break;
                 default:
                     _chat.Print("[Submarines] Unknown subcommand. Try: /xsr help");
                     break;
@@ -1453,7 +1455,8 @@ public sealed partial class Plugin : IDalamudPlugin
 
     private bool _notifiedThisVisibility;
 
-    private void CmdSelfTest()
+    // Removed: self-test entry point (kept for historical reference, now unused)
+    private void XSR_Removed_CmdSelfTest()
     {
         try
         {

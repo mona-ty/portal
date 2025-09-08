@@ -100,7 +100,8 @@ namespace XIVSubmarinesReturn.Services
                 _log.Warning(ex, "Discord NotifyAlarm failed");
                 XsrDebug.Log(_cfg, "Discord NotifyAlarm failed", ex);
             }
-        }private static SubmarineRecord? GetNearest(SubmarineSnapshot snap)
+        }
+        private static SubmarineRecord? GetNearest(SubmarineSnapshot snap)
         {
             try
             {
@@ -113,7 +114,6 @@ namespace XIVSubmarinesReturn.Services
         }
 
         // Extended line builder that prefers full local date-time for ETA
-                        // Extended line builder that prefers full local date-time for ETA
         private static string BuildSnapshotLine2(SubmarineRecord it)
         {
             string eta = string.Empty;
@@ -131,15 +131,6 @@ namespace XIVSubmarinesReturn.Services
             var rem = it.Extra != null && it.Extra.TryGetValue("RemainingText", out var rm) ? rm : string.Empty;
             var rt = it.Extra != null && it.Extra.TryGetValue("RouteShort", out var r) ? r : it.RouteKey;
             return  $"[Sub] {eta} (残 {rem}) {rt}".Trim(); 
-        }private static string BuildSnapshotLine(SubmarineRecord it)
-        {
-            var eta = it.Extra != null && it.Extra.TryGetValue("EtaLocal", out var t) ? t : string.Empty;
-            var rem = it.Extra != null && it.Extra.TryGetValue("RemainingText", out var rm) ? rm : string.Empty;
-            var rt = it.Extra != null && it.Extra.TryGetValue("RouteShort", out var r) ? r : it.RouteKey;
-            var slot = it.Slot.HasValue ? $"S{it.Slot.Value} " : string.Empty;
-            return $"[Sub] {slot}{it.Name} {eta} (残 {rem}) {rt}".Trim();
-        }
-
         private async Task PostAsync(string url, string content, CancellationToken ct)
         {
             try
