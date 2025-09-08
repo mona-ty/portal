@@ -92,4 +92,17 @@
   <PropertyGroup>
     <SkipPack>true</SkipPack>
   </PropertyGroup>
+
+  <!-- Optional: Copy build outputs to devPlugins for quick local testing.
+       Set DevPluginsDir in Local.props. Skipped when empty. -->
+  <Target Name="CopyToDevPlugins" AfterTargets="Build" Condition=" '$(DevPluginsDir)' != '' ">
+    <Message Text="Copying plugin outputs to $(DevPluginsDir)" Importance="low" />
+    <MakeDir Directories="$(DevPluginsDir)" />
+    <ItemGroup>
+      <_DevFiles Include="$(TargetDir)$(AssemblyName).dll" />
+      <_DevFiles Include="$(TargetDir)manifest.json" />
+      <_DevFiles Include="$(TargetDir)icon.png" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_DevFiles)" DestinationFolder="$(DevPluginsDir)" SkipUnchangedFiles="true" />
+  </Target>
 </Project>
