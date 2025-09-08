@@ -1,0 +1,9 @@
+addon=SelectString lines=10 items=4
+name* <- 'SM1' => SM1
+name* <- 'SMTwo' => SMTwo
+name* <- 'NAME3' => NAME3
+name* <- 'FF4' => FF4
+name* <- 'SM1' => SM1
+name* <- 'SMTwo' => SMTwo
+name* <- 'NAME3' => NAME3
+name* <- 'FF4' => FF4

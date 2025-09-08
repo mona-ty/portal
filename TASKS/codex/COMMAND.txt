@@ -1,0 +1,130 @@
+以下を**そのまま Codex に貼り付け**てください（超短縮版）。
+目的：**最小差分で安定化 & 使い勝手向上**（Alarmバグ、重複呼び出し、既定値、UI 概要強化、MainUI導線）。
+
+---
+
+## 🔧 Codex 実装修正ブリーフ（Ultra‑Short）
+
+**Repo/Proj**: `apps/XIVSubmarinesReturn`（.NET 9 / Dalamud）
+**Build (DLLのみ)**:
+
+```
+dotnet build apps\XIVSubmarinesReturn\XIVSubmarinesReturn.csproj -c Release -p:Platform=x64 -p:SkipPack=true
+```
+
+（既存手順を踏襲）&#x20;
+
+---
+
+### T1 — Alarm 遷移検出の安定化（prev 分の永続化 + 廃棄）
+
+**Edit**: `src/Services/AlarmScheduler.cs`
+
+1. `Tick(DateTimeOffset now)` 冒頭でアクティブキー収集用を定義：
+
+```csharp
+var activeKeys = new HashSet<string>(StringComparer.Ordinal);
+```
+
+2. `foreach (var it in items)` の**中**で `idKey` 生成後に追記：
+
+```csharp
+activeKeys.Add(idKey);
+// ... ループ末尾（lead 走査の外側）で現在分を保存
+_prevMins[idKey] = mins;
+```
+
+3. `foreach (var it in items)` **終了後**、古いキーをクリーンアップ：
+
+```csharp
+foreach (var k in _prevMins.Keys.ToList())
+    if (!activeKeys.Contains(k)) _prevMins.Remove(k);
+```
+
+> これにより `prev > lead && now <= lead` の**境界交差**が連続 Tick でも正確に 1 回だけ発火します。現状は `_prevMins` が更新されず検出が不安定。&#x20;
+
+---
+
+### T2 — 重複呼び出しの削除（TrySetIdentity 二重）
+
+**Edit**: `src/Plugin.cs` の `OnCmdDump(...)`
+`TrySetIdentity(snap);` が**2回**連続で呼ばれているので**1回にする**（前者のみ残す）。
+
+> ノイズ削減 & 可観測性の一貫化。&#x20;
+
+---
+
+### T3 — 既定値の見直し（安定版デフォルト）
+
+**Edit**: `src/Configuration.cs`
+`DebugLogging` の初期値を **false** に設定。UI 側の説明は現状維持（必要であれば「詳細は Debug タブ」程度を追記）。
+
+> 変更ファイル群に `Configuration.cs` が含まれており既定値の調整はここで完結します。&#x20;
+
+---
+
+### T4 — UI 概要（Overview）に “今ほしい情報” を追加
+
+**Edit**: `src/Plugin.UI.cs`
+
+1. \*\*タブバー（最小）\*\*を導入：`Overview / Capture / Alarm / Discord / Notion / Advanced / Debug`
+
+   ```csharp
+   if (ImGui.BeginTabBar("xsr-tabs")) {
+     if (ImGui.BeginTabItem("Overview")) { DrawOverview(); ImGui.EndTabItem(); }
+     if (ImGui.BeginTabItem("Capture"))  { DrawCapture();  ImGui.EndTabItem(); }
+     if (ImGui.BeginTabItem("Alarm"))    { DrawAlarm();    ImGui.EndTabItem(); }
+     if (ImGui.BeginTabItem("Discord"))  { DrawDiscord();  ImGui.EndTabItem(); }
+     if (ImGui.BeginTabItem("Notion"))   { DrawNotion();   ImGui.EndTabItem(); }
+     if (ImGui.BeginTabItem("Advanced")) { DrawAdvanced(); ImGui.EndTabItem(); }
+     if (ImGui.BeginTabItem("Debug"))    { DrawDebug();    ImGui.EndTabItem(); }
+     ImGui.EndTabBar();
+   }
+   ```
+
+   （既存 UI を大きく崩さず**最小分割**）&#x20;
+
+2. **Overview 表**に以下の列を追加：`ETA(local) / Remaining / Route(short)`
+
+   * `it.Extra["EtaLocal"]` / `it.Extra["RemainingText"]` / `it.Extra["RouteShort"]` を利用（Discord で既に使用中の値と同一ロジック）。
+   * 取得できない場合は `"?"` フォールバック。
+
+   ```csharp
+   var eta = it.Extra != null && it.Extra.TryGetValue("EtaLocal", out var t) ? t : "?";
+   var rem = it.Extra != null && it.Extra.TryGetValue("RemainingText", out var rm) ? rm : "?";
+   var rt  = it.Extra != null && it.Extra.TryGetValue("RouteShort", out var r) ? r : it.RouteKey;
+   ```
+
+   > これらの追加情報は `DiscordNotifier.BuildSnapshotLine` ですでに整備済み。UI へ**転用**するだけで体験が大幅に向上します。&#x20;
+
+---
+
+### T5 — Main UI 起動導線（Dalamud v9）
+
+**Edit**: `src/Plugin.cs`（UI 初期化箇所）
+
+```csharp
+_pi.UiBuilder.OpenMainUi += () => _showUI = true;
+```
+
+> インストーラ等の “Open Main UI” と整合。現状の `OpenConfigUi` とは**別導線**として追加。&#x20;
+
+---
+
+## ✅ 回帰/受け入れ基準（最小）
+
+* **Alarm**：`prev=lead+1 → now=lead` で 1 回のみ通知。`prev=lead-1 → now=lead-1` は不発。再 Tick でも重複しない（T1）。&#x20;
+* **Dump**：チャット出力・内部処理に重複がない（T2）。&#x20;
+* **既定値**：新規構成で `DebugLogging=false`（T3）。&#x20;
+* **Overview**：`ETA(local)/Remaining/Route(short)` が読める（T4）。値は Discord と一致（目視）。（T4）&#x20;
+* **Main UI**：インストーラの “Open Main UI” でメイン UI が確実に開く（T5）。&#x20;
+
+---
+
+### 参考（現状サマリ）
+
+今回の改修は直近のレビュー＆変更まとめの延長線で、**小さな差分**で完了します（変更ファイル一覧・実施内容は以下）。
+
+---
+
+以上。

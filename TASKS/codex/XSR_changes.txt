@@ -1,0 +1,21 @@
+Changed files:
+- apps/XIVSubmarinesReturn/src/Configuration.cs
+- apps/XIVSubmarinesReturn/src/Services/NotionClient.cs
+- apps/XIVSubmarinesReturn/src/Services/AlarmScheduler.cs
+- apps/XIVSubmarinesReturn/src/Services/GoogleCalendarClient.cs
+- apps/XIVSubmarinesReturn/src/Services/DiscordNotifier.cs
+- apps/XIVSubmarinesReturn/src/Services/EtaFormatter.cs
+- apps/XIVSubmarinesReturn/src/Plugin.UI.cs
+- apps/XIVSubmarinesReturn/src/Plugin.cs
+- apps/XIVSubmarinesReturn/src/Extractors.cs
+
+Build/test quick guide:
+- Build dll only:
+  dotnet build apps\XIVSubmarinesReturn\XIVSubmarinesReturn.csproj -c Release -p:Platform=x64
+- Avoid packager zip lock (if any):
+  Close processes locking bin/x64/Release and rebuild; or adjust packager settings.
+
+Manual checks:
+- In game: /xsr help, /xsr dump, and workshop open auto-capture
+- Discord: set Webhook URL and Test; expect JP labels (残/分)
+- Notion: set token/db, PerSlot mode, Validate properties

@@ -1,0 +1,138 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Numerics;
+using ImGui = Dalamud.Bindings.ImGui.ImGui;
+using ImGuiTableFlags = Dalamud.Bindings.ImGui.ImGuiTableFlags;
+
+namespace XIVSubmarinesReturn.UI
+{
+    internal static class AlarmTab
+    {
+        private static bool _revealDiscord;
+        private static bool _revealNotion;
+        private static bool _revealGcalRefresh;
+        private static bool _revealGcalSecret;
+
+        internal static void Draw(Plugin p)
+        {
+            using var _ = Theme.UseDensity(p.Config.UiRowDensity);
+            try { ImGui.SetWindowFontScale(Math.Clamp(p.Config.UiFontScale, 0.9f, 1.3f)); } catch { }
+
+            // 2カラムグリッド（上段: ゲーム内/Discord、下段: Notion/Google）
+            if (ImGui.BeginTable("alarm_grid", 2, ImGuiTableFlags.SizingStretchSame))
+            {
+                ImGui.TableNextRow();
+                // Game alarm
+                ImGui.TableSetColumnIndex(0);
+                using (Widgets.Card("card_game_alarm", new Vector2(0, 120)))
+                {
+                    Widgets.SectionHeader("ゲーム内アラーム");
+                    var enable = p.Config.GameAlarmEnabled;
+                    Widgets.StatusPill(enable, "Enabled", "Disabled"); ImGui.SameLine();
+                    if (ImGui.Checkbox("有効", ref enable)) { p.Config.GameAlarmEnabled = enable; p.SaveConfig(); }
+
+                    // Lead minutes editor（省スペース配置）
+                    var list = (p.Config.AlarmLeadMinutes ?? new List<int>()).ToList();
+                    ImGui.Text("リード分");
+                    foreach (var m in list.OrderBy(x => x).ToArray())
+                    { ImGui.SameLine(); Widgets.Badge($"{m}分"); }
+                    if (ImGui.SmallButton("+5")) list.Add(5); ImGui.SameLine();
+                    if (ImGui.SmallButton("+10")) list.Add(10); ImGui.SameLine();
+                    if (ImGui.SmallButton("+30")) list.Add(30); ImGui.SameLine();
+                    if (ImGui.SmallButton("+0")) list.Add(0);
+                    var distinct = list.Distinct().OrderBy(x => x).ToList();
+                    if (!Enumerable.SequenceEqual(distinct, (p.Config.AlarmLeadMinutes ?? new()).OrderBy(x => x)))
+                    { p.Config.AlarmLeadMinutes = distinct; p.SaveConfig(); }
+                    ImGui.Separator();
+                    if (ImGui.SmallButton("テスト")) { p.Ui_TestGameAlarm(); }
+                }
+
+                // Discord
+                ImGui.TableSetColumnIndex(1);
+                using (Widgets.Card("card_discord", new Vector2(0, 120)))
+                {
+                    Widgets.SectionHeader("Discord");
+                    var enabled = p.Config.DiscordEnabled;
+                    Widgets.StatusPill(enabled, "Enabled", "Disabled"); ImGui.SameLine();
+                    if (ImGui.Checkbox("有効", ref enabled)) { p.Config.DiscordEnabled = enabled; p.SaveConfig(); }
+                    var wh = p.Config.DiscordWebhookUrl ?? string.Empty;
+                    if (Widgets.MaskedInput("Webhook URL", ref wh, 256, ref _revealDiscord)) { p.Config.DiscordWebhookUrl = wh; p.SaveConfig(); }
+                    var latestOnly = p.Config.DiscordLatestOnly;
+                    if (ImGui.Checkbox("最早のみ", ref latestOnly)) { p.Config.DiscordLatestOnly = latestOnly; p.SaveConfig(); }
+                    var embeds = p.Config.DiscordUseEmbeds;
+                    if (ImGui.Checkbox("埋め込み", ref embeds)) { p.Config.DiscordUseEmbeds = embeds; p.SaveConfig(); }
+                }
+
+                ImGui.TableNextRow();
+                // Notion
+                ImGui.TableSetColumnIndex(0);
+                using (Widgets.Card("card_notion", new Vector2(0, 140)))
+                {
+                    Widgets.SectionHeader("Notion");
+                    var nEnable = p.Config.NotionEnabled;
+                    Widgets.StatusPill(nEnable, "Enabled", "Disabled"); ImGui.SameLine();
+                    if (ImGui.Checkbox("有効", ref nEnable)) { p.Config.NotionEnabled = nEnable; p.SaveConfig(); }
+                    var token = p.Config.NotionToken ?? string.Empty;
+                    if (Widgets.MaskedInput("Integration Token", ref token, 256, ref _revealNotion)) { p.Config.NotionToken = token; p.SaveConfig(); }
+                    var db = p.Config.NotionDatabaseId ?? string.Empty;
+                    if (ImGui.InputText("Database ID", ref db, 128)) { p.Config.NotionDatabaseId = db; p.SaveConfig(); }
+                    var nLatest = p.Config.NotionLatestOnly;
+                    if (ImGui.Checkbox("最早のみ", ref nLatest)) { p.Config.NotionLatestOnly = nLatest; p.SaveConfig(); }
+                    ImGui.Text("Upsert key mode");
+                    var mode = (int)p.Config.NotionKeyMode;
+                    if (ImGui.RadioButton("Per Slot", mode == 0)) { p.Config.NotionKeyMode = NotionKeyMode.PerSlot; p.SaveConfig(); mode = 0; }
+                    ImGui.SameLine(); if (ImGui.RadioButton("Slot+Route", mode == 1)) { p.Config.NotionKeyMode = NotionKeyMode.PerSlotRoute; p.SaveConfig(); mode = 1; }
+                    ImGui.SameLine(); if (ImGui.RadioButton("Voyage", mode == 2)) { p.Config.NotionKeyMode = NotionKeyMode.PerVoyage; p.SaveConfig(); mode = 2; }
+                }
+
+#if XSR_FEAT_GCAL
+                // Google
+                ImGui.TableSetColumnIndex(1);
+                using (Widgets.Card("card_gcal", new Vector2(0, 140)))
+                {
+                    Widgets.SectionHeader("Google Calendar");
+                    var gEnable = p.Config.GoogleEnabled;
+                    Widgets.StatusPill(gEnable, "Enabled", "Disabled"); ImGui.SameLine();
+                    if (ImGui.Checkbox("有効", ref gEnable)) { p.Config.GoogleEnabled = gEnable; p.SaveConfig(); }
+                    int modeVal = p.Config.GoogleEventMode == CalendarMode.Latest ? 1 : 0;
+                    if (ImGui.RadioButton("All", modeVal == 0)) { p.Config.GoogleEventMode = CalendarMode.All; p.SaveConfig(); modeVal = 0; }
+                    ImGui.SameLine(); if (ImGui.RadioButton("Latest", modeVal == 1)) { p.Config.GoogleEventMode = CalendarMode.Latest; p.SaveConfig(); modeVal = 1; }
+                    var calId = p.Config.GoogleCalendarId ?? string.Empty;
+                    if (ImGui.InputText("CalendarId", ref calId, 128)) { p.Config.GoogleCalendarId = calId; p.SaveConfig(); }
+                    var rt = p.Config.GoogleRefreshToken ?? string.Empty;
+                    if (Widgets.MaskedInput("RefreshToken", ref rt, 128, ref _revealGcalRefresh)) { p.Config.GoogleRefreshToken = rt; p.SaveConfig(); }
+                    var cid = p.Config.GoogleClientId ?? string.Empty;
+                    if (ImGui.InputText("ClientId", ref cid, 128)) { p.Config.GoogleClientId = cid; p.SaveConfig(); }
+                    var cs = p.Config.GoogleClientSecret ?? string.Empty;
+                    if (Widgets.MaskedInput("ClientSecret", ref cs, 128, ref _revealGcalSecret)) { p.Config.GoogleClientSecret = cs; p.SaveConfig(); }
+                }
+#endif
+                ImGui.EndTable();
+            }
+
+#if XSR_FEAT_GCAL
+            // Google Calendar (optional)
+            using (Widgets.Card("card_gcal"))
+            {
+                Widgets.SectionHeader("Google Calendar");
+                var gEnable = p.Config.GoogleEnabled;
+                Widgets.StatusPill(gEnable, "Enabled", "Disabled"); ImGui.SameLine();
+                if (ImGui.Checkbox("有効", ref gEnable)) { p.Config.GoogleEnabled = gEnable; p.SaveConfig(); }
+                int modeVal = p.Config.GoogleEventMode == CalendarMode.Latest ? 1 : 0;
+                if (ImGui.RadioButton("All", modeVal == 0)) { p.Config.GoogleEventMode = CalendarMode.All; p.SaveConfig(); modeVal = 0; }
+                ImGui.SameLine(); if (ImGui.RadioButton("Latest only", modeVal == 1)) { p.Config.GoogleEventMode = CalendarMode.Latest; p.SaveConfig(); modeVal = 1; }
+                var calId = p.Config.GoogleCalendarId ?? string.Empty;
+                if (ImGui.InputText("CalendarId", ref calId, 128)) { p.Config.GoogleCalendarId = calId; p.SaveConfig(); }
+                var rt = p.Config.GoogleRefreshToken ?? string.Empty;
+                if (Widgets.MaskedInput("RefreshToken", ref rt, 256, ref _revealGcalRefresh)) { p.Config.GoogleRefreshToken = rt; p.SaveConfig(); }
+                var cid = p.Config.GoogleClientId ?? string.Empty;
+                if (ImGui.InputText("ClientId", ref cid, 256)) { p.Config.GoogleClientId = cid; p.SaveConfig(); }
+                var cs = p.Config.GoogleClientSecret ?? string.Empty;
+                if (Widgets.MaskedInput("ClientSecret", ref cs, 256, ref _revealGcalSecret)) { p.Config.GoogleClientSecret = cs; p.SaveConfig(); }
+            }
+#endif
+        }
+    }
+}
+

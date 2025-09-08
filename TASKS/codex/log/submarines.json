@@ -1,0 +1,72 @@
+{
+  "SchemaVersion": 2,
+  "PluginVersion": "0.1.1",
+  "CapturedAt": "2025-09-08T13:09:41.0142468+00:00",
+  "Items": [
+    {
+      "Name": "SM1",
+      "RouteKey": "Point-13 - Point-18 - Point-15 - Point-10 - Point-26",
+      "DurationMinutes": 1110,
+      "Rank": 94,
+      "Slot": 1,
+      "IsDefaultName": false,
+      "EtaUnix": 1757403617,
+      "Extra": {
+        "RouteShort": "M\u003ER\u003EO\u003EJ\u003EZ",
+        "EtaLocal": "16:40",
+        "EtaLocalFull": "2025/9/9 16:40",
+        "RemainingText": "18\u6642\u959331\u5206"
+      }
+    },
+    {
+      "Name": "SMTwo",
+      "RouteKey": "Point-13 - Point-18 - Point-15 - Point-10 - Point-26",
+      "DurationMinutes": 1110,
+      "Rank": 94,
+      "Slot": 2,
+      "IsDefaultName": false,
+      "EtaUnix": 1757403627,
+      "Extra": {
+        "RouteShort": "M\u003ER\u003EO\u003EJ\u003EZ",
+        "EtaLocal": "16:40",
+        "EtaLocalFull": "2025/9/9 16:40",
+        "RemainingText": "18\u6642\u959331\u5206"
+      }
+    },
+    {
+      "Name": "NAME3",
+      "RouteKey": "Point-13 - Point-18 - Point-15 - Point-10 - Point-26",
+      "DurationMinutes": 1110,
+      "Rank": 94,
+      "Slot": 3,
+      "IsDefaultName": false,
+      "EtaUnix": 1757403635,
+      "Extra": {
+        "RouteShort": "M\u003ER\u003EO\u003EJ\u003EZ",
+        "EtaLocal": "16:40",
+        "EtaLocalFull": "2025/9/9 16:40",
+        "RemainingText": "18\u6642\u959331\u5206"
+      }
+    },
+    {
+      "Name": "FF4",
+      "RouteKey": "Point-13 - Point-18 - Point-15 - Point-10 - Point-26",
+      "DurationMinutes": 1116,
+      "Rank": 93,
+      "Slot": 4,
+      "IsDefaultName": false,
+      "EtaUnix": 1757403955,
+      "Extra": {
+        "RouteShort": "M\u003ER\u003EO\u003EJ\u003EZ",
+        "EtaLocal": "16:45",
+        "EtaLocalFull": "2025/9/9 16:45",
+        "RemainingText": "18\u6642\u959336\u5206"
+      }
+    }
+  ],
+  "Source": "dalamud",
+  "Note": "captured from memory (WorkshopTerritory.Submersible)",
+  "Character": null,
+  "World": null,
+  "FreeCompany": null
+}

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project>
+  <!-- Allow overriding zip creation via /p:MakeZip=false or skipping via /p:SkipPack=true -->
+  <PropertyGroup>
+    <!-- 既定でZIPは作らない（DLLのみ）。必要時は -p:MakeZip=true で明示有効化 -->
+    <MakeZip>false</MakeZip>
+  </PropertyGroup>
+
+  <!-- Run packager after Release builds to produce manifest + latest.zip -->
+  <Target Name="PackagePlugin" AfterTargets="Build" Condition="'$(Configuration)' == 'Release' and '$(SkipPack)' != 'true' and '$(MakeZip)' == 'true'">
+    <DalamudPackager
+      ProjectDir="$(ProjectDir)"
+      OutputPath="$(OutputPath)"
+      AssemblyName="$(AssemblyName)"
+      MakeZip="$(MakeZip)" />
+  </Target>
+</Project>
+

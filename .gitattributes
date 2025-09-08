@@ -1,0 +1,58 @@
+# Core line-ending policy
+# Default: normalize to LF in repo; check out with LF on all platforms
+* text eol=lf
+
+# Windows-specific files: keep CRLF on checkout
+*.sln text eol=crlf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Unix scripts: enforce LF
+*.sh text eol=lf
+
+# Source code (explicit text)
+*.cs text
+*.csproj text
+*.props text
+*.targets text
+*.xml text
+*.json text
+*.yml text
+*.yaml text
+*.toml text
+*.md text
+*.py text
+*.ps1 text
+*.ts text
+*.tsx text
+*.js text
+*.jsx text
+*.html text
+*.css text
+
+# Binary files (no diffs/merges)
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.pdf binary
+*.zip binary
+*.tar binary
+*.gz binary
+*.7z binary
+*.docx binary
+*.pptx binary
+*.xlsx binary
+*.dll binary
+*.exe binary
+
+# Lock files (prefer current branch on merge to avoid churn)
+package-lock.json merge=ours
+yarn.lock merge=ours
+pnpm-lock.yaml merge=ours
+
+# Markdown: prefer union merges for list-heavy content (optional)
+*.md merge=union
+

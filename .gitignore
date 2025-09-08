@@ -1,35 +1,103 @@
-# Python
-__pycache__/
-*.py[cod]
-*.pyo
-*.pyd
-.Python
-.pytest_cache/
-.mypy_cache/
+# ===== OS / Editor =====
+.DS_Store
+Thumbs.db
+Desktop.ini
+.history/
+.idea/
+.vscode/
+.Spotlight-V100
+.Trashes
+.fseventsd
 
-# Environments
+# ===== Logs / Temp =====
+*.log
+*.tmp
+*.swp
+*.swo
+*.swn
+**/*.tmp
+**/*~
+**/*.orig
+**/*.rej
+tmp/
+.tmp/
+.tmp.driveupload/
+.tmp.drivedownload/
+
+# ===== Environments =====
 .env
+.env.*
+.env.local
+!.env.example
+.Python
 .venv/
 venv/
 ENV/
 
-# OS
-.DS_Store
-Thumbs.db
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.nox/
+.hypothesis/
+build/
+dist/
+htmlcov/
+coverage/
+coverage.xml
+.coverage*
+.cache/
 
-# Project data (local state)
+# ===== Node / JS =====
+**/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.pnpm-store/
+.turbo/
+.next/
+.nuxt/
+out/
+
+# ===== .NET / Visual Studio =====
+.vs/
+**/bin/
+**/obj/
+
+# ===== Archives / Generated =====
+*.zip
+*.tar
+*.tar.gz
+*.7z
+
+# ===== Project-specific =====
+# Local project data & secrets
 data/
-
-# Secrets
 credentials.json
-
-# Logs
-*.log
-
-# Local backups (not tracked)
 backup/
-# Ignore nested caches and project data under apps
+**/*.bak
+
+# app-specific ignores
 apps/**/__pycache__/
 apps/**/data/
-# Generic backup files
-**/*.bak
+apps/**/log/
+apps/**/Local.props
+!apps/**/Local.props.example
+
+# samples and notes (large / personal)
+samples/
+/notes/
+
+# archive folder keep marker
+archive/*
+!archive/.gitkeep
+
+# XSR external artifacts (downloaded refs)
+/apps/XIVSubmarinesReturn/_external/

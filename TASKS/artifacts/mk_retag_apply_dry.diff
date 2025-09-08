@@ -1,0 +1,26 @@
+--- a/notes/MK/10_research/【必見】改良版まじん式プロンプト！｜まじん.md
++++ b/notes/MK/10_research/【必見】改良版まじん式プロンプト！｜まじん.md
+@@ -6,7 +6,7 @@
+ published: 2025-08-29
+ created: 2025-08-29
+ description: こんにちは、まじんです。  先日公開した 「【神回】Googleスライドが一瞬で完成する“奇跡”のプロンプト」 が、想像を超える反響をいただきました。 読んでくださった皆さま、そしてシェアで広めてくださった皆さま、本当にありがとうございます！  なんと、普段は一ファンとして楽しみに観ていた YouTubeチャンネル でも取り上げていただきました！ まさか自分のプロンプトが紹介されるなんて…本当に感慨深いです。        一方で、多くのご感想やアレンジ作品を見る中で、いくつかの 課題や改良の余地 も見えてきました。 そこで今回は、その声を反映し、より実践的にブラッシュアップした 「ま
+-tags:
++tags: [ff0000」(赤)を指定して, スライド, プロンプト, カスタム, gemini]
+   - スライド
+   - プロンプト
+   - カスタム
+--- a/notes/MK/50_code/Dashboard.md
++++ b/notes/MK/50_code/Dashboard.md
+@@ -1,6 +1,6 @@
+ ---
+ title: Dashboard (MK Vault)
+-tags: []
++tags: [dashboard, vault, inlinks, orphans, outlinks]
+ status: draft
+ created: 2025-09-06
+ updated: 2025-09-06
+@@ -49,4 +49,3 @@
+ WHERE file.mtime >= date(today) - dur(14 days) AND !contains(file.path, "70_templates/") AND !contains(file.path, "60_attachments/")
+ SORT file.mtime DESC
+ ```
+-

@@ -1,0 +1,152 @@
+# AI-Oriented Obsidian Organization Policy Template
+# このテンプレートはAI/スクリプトが機械的に解釈し、
+# Obsidian Vault の整理（分類・移動・タグ付け・リンク補正 等）を安全に実行するための方針を宣言します。
+# 必要に応じて値を埋め、不要なセクションは削除して運用してください。
+
+policy:
+  version: 1
+  name: "<PROJECT_NAME or VAULT_NAME>"
+  vault_root: "notes/MK"           # Vault ルート（相対パス/Windowsでもフォワードスラッシュ可）
+  reports_dir: "tasks/artifacts"   # 監査/差分/計画の出力先
+  dry_run_default: true             # 既定はドライラン
+  batch_size: 100                   # 段階適用の単位件数
+
+scope:
+  include:
+    - "**/*.md"
+  exclude:
+    - "**/.git/**"
+    - "**/.obsidian/**"
+    - "**/70_templates/**"
+    - "**/60_attachments/**"
+    - "**/90_archive/**"
+  protected_paths: []               # 例: ["notes/MK/private/**"] ここは編集/移動しない
+
+workflow:
+  phases:
+    - backup
+    - classify
+    - move
+    - front_matter_fix
+    - retag
+    - link_fix
+    - attachments
+    - review
+  approvals:
+    destructive_moves: true         # 破壊的操作（大量移動/削除）は承認が必要
+    rename: true                    # リネームは承認が必要（デフォルト禁止）
+
+conventions:
+  folders:                          # 目的別トップフォルダの役割
+    "00_inbox": "収集箱（未整形）"
+    "10_research": "外部情報/引用/出典付きの一次情報"
+    "20_notes": "蒸留済みの単一主題ノート（Zettelkasten的）"
+    "30_projects": "案件/テーマのワークノート（README/進行ログ）"
+    "40_prompts": "生成AIのプロンプト集"
+    "50_code": "スニペット・手順・開発メモ"
+    "60_attachments": "添付ファイル置き場（画像/PDF等）"
+    "70_templates": "テンプレート置き場"
+    "90_archive": "完了/凍結のアーカイブ"
+  naming:
+    unicode_normalization: "NFKC"
+    space_replacement: "-"          # 空白→ハイフン
+    forbidden_chars: "<>:\"|?*"     # Windows 予約/禁止文字は除去
+    keep_japanese: true             # 日本語名は許容
+  front_matter:
+    required: [title, tags, status, created, updated]
+    defaults:
+      status: draft
+    tags_limit: 5
+  tags:
+    blacklist: ["mk"]               # 管理用タグは除外
+    whitelist: []
+    normalize:
+      ascii_lower: true
+      whitespace_to_hyphen: true
+  links:
+    prefer: "wikilink"              # or "markdown"
+    auto_update:
+      threshold: 0.80               # 近似リンク自動置換のしきい値
+      margin: 0.10                  # 1位-2位のスコア差
+    normalize:
+      empty_target_to: "untitled.md"
+      create_stub_for_missing_notes: true
+      assets_dir: "60_attachments"
+      asset_placeholder_name: "placeholder.png"
+  rename:
+    enabled: false                  # 既定は無効（承認がない限り実施しない）
+
+operations:
+  classify:                         # 分類ルール（例）
+    enabled: true
+    signals:
+      prompts:
+        tags_any: ["prompt", "prompts"]
+        headings_any: ["Task", "Model", "System", "Few-Shots", "Input", "Output"]
+        to_folder: "40_prompts"
+      code:
+        tags_any: ["code", "snippet", "dev"]
+        heuristics_any: ["codeblocks>=2", "import|class|def|function|curl|pip install|npm install|dotnet|powershell"]
+        to_folder: "50_code"
+      research:
+        tags_any: ["research", "paper", "reference"]
+        heuristics_any: ["urls>=3", "headings_any: [Summary, Quotes, Excerpts, Source, Links]"]
+        to_folder: "10_research"
+      projects:
+        filenames_any: ["README.md"]
+        headings_any: ["Overview", "Goals", "Scope", "Timeline", "Milestones", "Tasks"]
+        to_folder: "30_projects"
+      notes:
+        headings_any: ["TL;DR", "Details", "Why", "Key Points"]
+        to_folder: "20_notes"
+  move:
+    enabled: true
+    dry_run: true
+  front_matter_fix:
+    enabled: true
+    add_missing_only: true
+  retag:
+    enabled: true
+    mode: "supplement"             # "untagged" | "supplement" | "all"
+    sources_order: ["inline", "keywords", "domains"]
+    weights:
+      inline: 2.0
+      keywords: 1.0
+      domains: 1.5
+  link_fix:
+    enabled: true
+    auto_apply:
+      threshold: 0.75
+      margin: 0.10
+    normalize:
+      enable: true
+  attachments:
+    enabled: true
+    move_to: "60_attachments"
+
+reports:
+  required:
+    - mk_classification_proposals.csv
+    - mk_moves_applied_*.csv
+    - mk_frontmatter_dry_run.csv
+    - mk_frontmatter_apply_plan.csv
+    - mk_retag_dry_run.csv
+    - mk_retag_apply_plan.csv
+    - mk_link_audit.csv
+    - mk_link_autoapply_plan.csv
+    - mk_link_normalize_plan.csv
+    - mk_attachments_dry_run.csv
+
+exceptions:
+  # 強制的に対象外/ルール上書きにしたい場合の指定
+  never_edit:
+    - "notes/MK/private/**"
+  never_move:
+    - "notes/MK/30_projects/**"
+  rename_allow: []                  # リネームを許可するパス（通常は空）
+
+notes:
+  - "まずは backup→ドライラン→レビュー→適用の順に運用してください。"
+  - "Obsidian 側では Files & Links の『Automatically update internal links』を ON 推奨。"
+  - "iOS 併用時も同方針（テンプレ/QuickAdd/Dataview）で運用可能です。"
+
