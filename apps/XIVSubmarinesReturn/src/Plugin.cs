@@ -181,7 +181,8 @@ public sealed partial class Plugin : IDalamudPlugin
 
     private void OnCmdConfig(string cmd, string args)
     {
-        _chat.Print("[Submarines] 設定UIは未実装です。/xsr addon <name> で対象アドオンを設定可能です。");
+        // 互換: 旧経路から呼ばれた場合も設定UIを開く
+        OnCmdConfigOpen(cmd, args);
     }
 
     private void OnCmdCfg(string args)
@@ -812,14 +813,7 @@ public sealed partial class Plugin : IDalamudPlugin
             var a = (args ?? string.Empty).Trim();
             if (string.IsNullOrEmpty(a))
             {
-                _chat.Print($"[Submarines] Version: {typeof(Plugin).Assembly.GetName().Version?.ToString(3) ?? "0.0.0"}");
-                _chat.Print("[Submarines] Commands: dump | dumpmem | learnnames | ui | cfg mem on|off | open | addon <name> | version");
-                _chat.Print("  /xsr dump  -> same as /subdump");
-                _chat.Print("  /xsr open  -> same as /subopen");
-                _chat.Print("  /xsr addon <name> -> same as /subaddon <name>");
-                _chat.Print("  /xsr version -> print plugin version");
-                _chat.Print("  /xsr probe -> check common addon names");
-                _chat.Print("  /xsr dumpstage -> scan many addons on screen");
+                PrintHelp();
                 return;
             }
 
@@ -833,6 +827,9 @@ public sealed partial class Plugin : IDalamudPlugin
                     break;
                 case "dumpmem":
                     CmdDumpFromMemory();
+                    break;
+                case "help":
+                    PrintHelp();
                     break;
                 case "version":
                     _chat.Print($"[Submarines] Version: {typeof(Plugin).Assembly.GetName().Version?.ToString(3) ?? "0.0.0"}");
@@ -870,8 +867,26 @@ public sealed partial class Plugin : IDalamudPlugin
         }
         catch (Exception ex)
         {
-            _chat.PrintError($"[Submarines] �G���[: {ex.Message}");
+            _chat.PrintError($"[Submarines] エラー: {ex.Message}");
         }
+    }
+
+    private void PrintHelp()
+    {
+        try
+        {
+            _chat.Print($"[Submarines] Version: {typeof(Plugin).Assembly.GetName().Version?.ToString(3) ?? "0.0.0"}");
+            _chat.Print("[Submarines] Commands: help | dump | dumpmem | learnnames | ui | open | addon <name> | cfg mem on|off | version | probe | dumpstage");
+            _chat.Print("  /xsr dump       -> JSONを書き出し（/subdump と同等）");
+            _chat.Print("  /xsr dumpmem    -> メモリ直読で取得");
+            _chat.Print("  /xsr ui         -> 設定ウィンドウを開く（/subcfg でも開く）");
+            _chat.Print("  /xsr open       -> 出力フォルダを開く（/subopen と同等）");
+            _chat.Print("  /xsr addon <n>  -> 取得対象のアドオン名を設定（/subaddon と同等）");
+            _chat.Print("  /xsr cfg mem on|off -> UI失敗時にメモリ直読するか");
+            _chat.Print("  /xsr probe      -> よく使うアドオン名の存在/可視を確認");
+            _chat.Print("  /xsr dumpstage  -> 画面上の多数アドオンからテキスト走査");
+        }
+        catch { }
     }
 
     private void OnCmdSetAddon(string cmd, string args)
@@ -1659,5 +1674,4 @@ public sealed partial class Plugin : IDalamudPlugin
         }
     }
 }
-
 
