@@ -101,3 +101,11 @@ archive/*
 
 # XSR external artifacts (downloaded refs)
 /apps/XIVSubmarinesReturn/_external/
+
+# Workspace and external clones (managed outside Git)
+/workspace/
+/external/
+
+# Obsidian/notes backups (accidentally copied; some names start with a leading space)
+ /notes_backup_*/
+notes_backup_*/

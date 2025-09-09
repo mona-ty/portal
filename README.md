@@ -22,6 +22,31 @@
 - 日々の試行錯誤やノートはリポ外ワークスペースへ（例: `C:\\codex-work\\<repo>`）
 - アプリが成熟したら `scripts/split_repos.ps1` で独立リポへ昇格
 - CI: `.github/workflows/python-tests.yml`（Windows/Ubuntu で unittest 実行）
+
+## フォルダ運用ガイド（C:\\Codex）
+- 標準ディレクトリ
+  - `apps/`: 各アプリの実体（XIVSubmarinesReturn ほか）
+  - `docs/`, `templates/`, `scripts/`, `tests/`, `TASKS/`, `tools/`, `archive/`, `tmp/`
+  - `workspace/`, `external/`: 作業場/外部物（Git管理外。`.gitignore` 済み）
+- 退避運用
+  - アーカイブは `archive/` に移動（履歴保持。基本は閲覧専用）
+  - 一時生成物は `tmp/`（定期的に掃除）
+- ノート
+  - `notes/` は Obsidian 用のため Git 管理外（`.gitignore` 済み）
+- Codex 起動（config.toml 駆動）
+  - Windows: `scripts\win\Start-WSLAndCodex.ps1`
+  - 自動走査レポート: `TASKS/autoscan/scan_YYYYMMDD-HHMM.md`
+  - モデル/推論深度は `config.toml` で制御（`model_reasoning_effort = "high"` など）
+
+### apps の重複名（ff14-submarines / ff14_submarines）の扱い
+- `apps/ff14-submarines/`（新・多機能）
+  - 目的: FF14サブマリンの帰還予定を OCR し Googleカレンダー登録
+  - 機能: 自動セットアップ（ネイティブ補助含む）、ホットキー、オーバーレイ、Google連携、設定/ログ等
+- `apps/ff14_submarines/`（軽量・旧）
+  - 目的: OCRテキストからETA抽出、フォルダ監視でPNG取り込み、通知/Discord簡易送出
+  - 規模: 最小構成（`__main__.py`, `ocr.py` 中心）
+- 推奨: 前者（ハイフン版）を正式運用。後者（アンダースコア版）はレガシーとして archive 退避を検討（要確認）。
+
 XIV Submarines Return
 
 概要
@@ -75,4 +100,3 @@ XIV Submarines Return
 
 開発ドキュメント
 - 詳細なアーキテクチャ、JSON スキーマ、外部連携（Discord/Notion/任意で Google Calendar）については `DEVELOPMENT.md` を参照してください。
-
