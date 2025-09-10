@@ -56,6 +56,9 @@ namespace XIVSubmarinesReturn.UI
 
                 if (ImGui.Button("フォルダを開く")) { p.Ui_OpenBridgeFolder(); }
                 ImGui.SameLine(); ImGui.TextDisabled("Bridgeフォルダを開く");
+
+                if (ImGui.Button("プロファイル状態をログ出力")) { p.Ui_LogProfileState(); }
+                ImGui.SameLine(); ImGui.TextDisabled("Active/Profiles/UIの状態を xsr_debug.log に吐きます");
             }
 
             // プローブ結果（省スペース）

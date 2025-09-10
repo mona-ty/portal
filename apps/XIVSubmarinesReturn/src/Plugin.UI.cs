@@ -171,6 +171,24 @@ public sealed partial class Plugin
     public void Ui_DumpMemory() { try { CmdDumpFromMemory(); _uiStatus = "Capture(Memory) triggered"; } catch (Exception ex) { _uiStatus = $"Capture(Memory) failed: {ex.Message}"; } }
     public void Ui_Probe() { try { _probeText = ProbeToText(); _uiStatus = "Probe done"; } catch (Exception ex) { _uiStatus = $"Probe failed: {ex.Message}"; } }
 
+    public void Ui_LogProfileState()
+    {
+        try
+        {
+            ulong? active = Config.ActiveContentId;
+            var list = Config.Profiles ?? new System.Collections.Generic.List<CharacterProfile>();
+            Services.XsrDebug.Log(Config, $"StateDump: active=0x{active?.ToString("X") ?? "null"}, profiles={list.Count}");
+            foreach (var p in list)
+            {
+                int items = 0; try { items = p.LastSnapshot?.Items?.Count ?? 0; } catch { }
+                Services.XsrDebug.Log(Config, $"  profile cid=0x{p.ContentId:X}, name='{p.CharacterName}', world='{p.WorldName}', items={items}");
+            }
+            int uiItems = 0; try { uiItems = _uiSnapshot?.Items?.Count ?? 0; } catch { }
+            Services.XsrDebug.Log(Config, $"  uiSnapshot items={uiItems}");
+        }
+        catch { }
+    }
+
     // ルート別名（レター）編集UI（ActiveProfile優先）。空文字にすると削除。
     public void Ui_DrawRouteAliasEditor()
     {
