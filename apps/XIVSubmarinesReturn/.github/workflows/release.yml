@@ -34,8 +34,8 @@ jobs:
           $repo = "https://github.com/${{ github.repository }}"
           $path = Join-Path $PWD 'manifest.json'
           $json = Get-Content $path -Raw | ConvertFrom-Json
-          $json.RepoUrl = $repo
-          $json.AssemblyVersion = $ver
+          if ($json.PSObject.Properties.Name -contains 'RepoUrl') { $json.RepoUrl = $repo }
+          if ($json.PSObject.Properties.Name -contains 'AssemblyVersion') { $json.AssemblyVersion = $ver }
           $json | ConvertTo-Json -Depth 4 | Set-Content $path -Encoding UTF8
           Write-Host "Manifest updated: RepoUrl=$repo, AssemblyVersion=$ver"
       - name: Build (Release x64 + package)
