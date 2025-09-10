@@ -1138,13 +1138,26 @@ public sealed partial class Plugin
         catch { try { ImGui.End(); } catch { } }
     }
 
+    // 表示中プロファイルが「現在ログイン中のキャラ」と一致する場合のみ、bridge JSON の自動再読込を許可
+    private bool ShouldReloadFromBridge()
+    {
+        try
+        {
+            if (_client == null || !_client.IsLoggedIn) return false;
+            var active = Config.ActiveContentId;
+            if (!active.HasValue) return true; // 未選択なら最新JSONを表示
+            return _client.LocalContentId == active.Value;
+        }
+        catch { return false; }
+    }
+
     private void DrawSnapshotTable()
     {
         try
         {
             // Reload snapshot if file changed or last read too old (5s)
             var path = BridgeWriter.CurrentFilePath();
-            if (!string.IsNullOrEmpty(path) && File.Exists(path))
+            if (ShouldReloadFromBridge() && !string.IsNullOrEmpty(path) && File.Exists(path))
             {
                 var lastWrite = File.GetLastWriteTimeUtc(path);
                 if (_uiSnapshot == null || lastWrite > _uiLastReadUtc || (DateTime.UtcNow - _uiLastReadUtc) > TimeSpan.FromSeconds(5))
@@ -1280,7 +1293,7 @@ public sealed partial class Plugin
         {
             // Reload snapshot if file changed or last read too old (5s)
             var path = BridgeWriter.CurrentFilePath();
-            if (!string.IsNullOrEmpty(path) && File.Exists(path))
+            if (ShouldReloadFromBridge() && !string.IsNullOrEmpty(path) && File.Exists(path))
             {
                 var lastWrite = File.GetLastWriteTimeUtc(path);
                 if (_uiSnapshot == null || lastWrite > _uiLastReadUtc || (DateTime.UtcNow - _uiLastReadUtc) > TimeSpan.FromSeconds(5))
