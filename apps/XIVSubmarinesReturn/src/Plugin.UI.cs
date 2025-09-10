@@ -27,8 +27,7 @@ public sealed partial class Plugin
     private string _alarmLeadText = string.Empty;
     private string _routeLearnLetters = string.Empty; // e.g., "M>R>O>J>Z"
     private string _filterText = string.Empty;
-    private int _sortField = 3; // 0=Name 1=Slot 2=Rank 3=ETA
-    private bool _sortAsc = true;
+    // removed unused sort fields (were not used)
     private XIVSubmarinesReturn.UI.SnapshotTable _snapTable = new XIVSubmarinesReturn.UI.SnapshotTable();    // reveal toggles for masked inputs
     private bool _revealDiscordWebhook;
     private bool _showLegacyUi = false;
@@ -105,7 +104,18 @@ public sealed partial class Plugin
                     var sel = display[Math.Clamp(curIndex, 0, display.Count - 1)];
                     Config.ActiveContentId = sel.ContentId;
                     SaveConfig();
-                    try { if (sel.LastSnapshot?.Items != null && sel.LastSnapshot.Items.Count > 0) { _uiSnapshot = sel.LastSnapshot; _uiLastReadUtc = DateTime.UtcNow; _uiStatus = "プロファイル保存データ"; } } catch { }
+                    try
+                    {
+                        if (sel.LastSnapshot?.Items != null && sel.LastSnapshot.Items.Count > 0)
+                        {
+                            _uiSnapshot = sel.LastSnapshot; _uiLastReadUtc = DateTime.UtcNow; _uiStatus = "プロファイル保存データ";
+                        }
+                        else
+                        {
+                            _uiSnapshot = null; _uiLastReadUtc = DateTime.MinValue; _uiStatus = "このプロファイルの保存データはありません";
+                        }
+                    }
+                    catch { }
                 }
             }
             ImGui.PopItemWidth();
@@ -296,8 +306,10 @@ public sealed partial class Plugin
         catch (Exception ex) { _uiStatus = $"Notion test failed: {ex.Message}"; }
     }
     private bool _revealNotionToken;
+    #if XSR_FEAT_GCAL
     private bool _revealGcalRefresh;
     private bool _revealGcalSecret;
+    #endif
 
     private void InitUI()
     {
@@ -847,17 +859,6 @@ public sealed partial class Plugin
                                     else
                                     {
                                         var map = GetRouteNameMap();
-                                        if (map == null)
-                                        {
-                                            try
-                                            {
-                                                var prof = GetActiveProfile();
-                                                if (prof != null) prof.RouteNames = new System.Collections.Generic.Dictionary<byte, string>();
-                                                if (Config.RouteNames == null) Config.RouteNames = new System.Collections.Generic.Dictionary<byte, string>();
-                                                map = prof?.RouteNames ?? Config.RouteNames;
-                                            }
-                                            catch { }
-                                        }
                                         for (int i = 0; i < nums.Count; i++)
                                         {
                                             var id = nums[i];
@@ -866,7 +867,7 @@ public sealed partial class Plugin
                                             {
                                                 map[(byte)id] = nm;
                                                 // 互換: グローバルにも反映
-                                                if (Config.RouteNames == null) Config.RouteNames = new System.Collections.Generic.Dictionary<byte, string>();
+                                                Config.RouteNames ??= new System.Collections.Generic.Dictionary<byte, string>();
                                                 Config.RouteNames[(byte)id] = nm;
                                             }
                                         }
@@ -1441,4 +1442,3 @@ public sealed partial class Plugin
         return string.Join(Environment.NewLine, lines);
     }
 }
-

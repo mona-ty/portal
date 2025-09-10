@@ -128,7 +128,8 @@ namespace XIVSubmarinesReturn.Sectors
             {
                 try
                 {
-                    var id = (uint)(row?.GetType().GetProperty("RowId")?.GetValue(row) ?? 0u);
+                    if (row is null) continue;
+                    var id = (uint)(row.GetType().GetProperty("RowId")?.GetValue(row) ?? 0u);
                     if (id == 0) continue;
                     var name = TryGetString(row, "Name") ?? TryGetString(row, "PlaceName");
                     var mapName = TryGetMapName(row) ?? string.Empty;

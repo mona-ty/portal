@@ -46,7 +46,9 @@ public sealed partial class Plugin : IDalamudPlugin
 
     private AlarmScheduler? _alarm;
     private DiscordNotifier? _discord;
+    #if XSR_FEAT_GCAL
     private GoogleCalendarClient? _gcal;
+    #endif
     private NotionClient? _notion;
     private SectorResolver? _sectorResolver;
     private Commands.SectorCommands? _sectorCommands;
@@ -152,12 +154,75 @@ public sealed partial class Plugin : IDalamudPlugin
     {
         try
         {
+            // 優先: 現在ログインしているキャラクターの CID へ保存（UI選択に依存しない）
+            try
+            {
+                if (_client != null && _client.IsLoggedIn)
+                {
+                    ulong id = _client.LocalContentId;
+                    if (id != 0)
+                    {
+                        var prof = GetOrCreateProfileById(id);
+                        if (prof != null)
+                        {
+                            prof.LastSnapshot = snap;
+                            SaveConfig();
+                            return;
+                        }
+                    }
+                }
+            }
+            catch { }
+
+            // フォールバック: 現在のアクティブプロファイルに保存
             var p = GetActiveProfile();
             if (p == null) return;
             p.LastSnapshot = snap;
             SaveConfig();
         }
         catch { }
+    }
+
+    // ログイン中のCID用プロフィールを作成/取得（UIの ActiveContentId は変更しない）
+    private CharacterProfile? GetOrCreateProfileById(ulong id)
+    {
+        try
+        {
+            var list = Config.Profiles ?? new System.Collections.Generic.List<CharacterProfile>();
+            var prof = list.FirstOrDefault(x => x.ContentId == id);
+            if (prof == null)
+            {
+                prof = new CharacterProfile { ContentId = id };
+                // 旧プレースホルダ（CID=0）からの引き継ぎ
+                try
+                {
+                    var ph = list.FirstOrDefault(x => x.ContentId == 0);
+                    if (ph != null)
+                    {
+                        try { if (prof.SlotAliases == null || prof.SlotAliases.Length == 0) prof.SlotAliases = ph.SlotAliases ?? new string[4]; } catch { }
+                        try { if (prof.LastRouteBySlot == null || prof.LastRouteBySlot.Count == 0) prof.LastRouteBySlot = ph.LastRouteBySlot ?? new System.Collections.Generic.Dictionary<int, string>(); } catch { }
+                        try { if (prof.RouteNames == null || prof.RouteNames.Count == 0) prof.RouteNames = ph.RouteNames ?? new System.Collections.Generic.Dictionary<byte, string>(); } catch { }
+                        try { list.Remove(ph); } catch { }
+                    }
+                }
+                catch { }
+                list.Add(prof);
+                Config.Profiles = list;
+            }
+            // メタ情報（可能なら更新）
+            try { prof.LastSeenUtc = DateTimeOffset.UtcNow; } catch { }
+            try
+            {
+                var lp = _client?.LocalPlayer;
+                if (lp != null)
+                {
+                    try { prof.CharacterName = lp.Name?.TextValue ?? prof.CharacterName; } catch { }
+                }
+            }
+            catch { }
+            return prof;
+        }
+        catch { return null; }
     }
 
     public void Dispose()
@@ -385,6 +450,20 @@ public sealed partial class Plugin : IDalamudPlugin
             BridgeWriter.WriteIfChanged(snap);
             try { TryPersistActiveProfileSnapshot(snap); } catch { }
             _chat.Print( $"[Submarines] JSONを書き出しました: {BridgeWriter.CurrentFilePath()}"); 
+            // 選択中プロファイルの表示を更新
+            try
+            {
+                var p = GetActiveProfile();
+                if (p?.LastSnapshot?.Items != null && p.LastSnapshot.Items.Count > 0)
+                {
+                    _uiSnapshot = p.LastSnapshot; _uiLastReadUtc = DateTime.UtcNow; _uiStatus = "メモリ取得";
+                }
+                else
+                {
+                    _uiSnapshot = null; _uiLastReadUtc = DateTime.MinValue; _uiStatus = "メモリ取得: 保存データなし";
+                }
+            }
+            catch { }
         }
         catch (Exception ex)
         {
@@ -508,7 +587,7 @@ public sealed partial class Plugin : IDalamudPlugin
                     continue;
 
                 bool wasDefault = System.Text.RegularExpressions.Regex.IsMatch(name ?? string.Empty, @"^Submarine-\d+$");
-                var rec = new SubmarineRecord { Name = name, Slot = i + 1, IsDefaultName = wasDefault };
+                var rec = new SubmarineRecord { Name = name ?? string.Empty, Slot = i + 1, IsDefaultName = wasDefault };
                 // 学習済みの実艦名があれば置き換え（スロット1..4 -> 配列0..3）
                 try
                 {
@@ -663,7 +742,7 @@ public sealed partial class Plugin : IDalamudPlugin
                 if (string.IsNullOrWhiteSpace(name)) continue;
 
                 bool wasDefault = System.Text.RegularExpressions.Regex.IsMatch(name ?? string.Empty, @"^Submarine-\d+$");
-                var rec = new SubmarineRecord { Name = name, Slot = i + 1, IsDefaultName = wasDefault };
+                var rec = new SubmarineRecord { Name = name ?? string.Empty, Slot = i + 1, IsDefaultName = wasDefault };
 
                 try
                 {
