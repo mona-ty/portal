@@ -191,11 +191,11 @@ namespace XIVSubmarinesReturn.UI
                     }
                     catch { ImGui.Text(string.Empty); }
 
-                    // 残り
+                    // 残り（ETAから“今この瞬間”の残分を再計算して表示。保存済みの RemainingText は使わない）
                     ImGui.TableSetColumnIndex(4);
                     try
                     {
-                        var rem = (it.Extra != null && it.Extra.TryGetValue("RemainingText", out var r)) ? r : string.Empty;
+                        string rem = BuildRemainingNow(it);
                         bool highlight = IsSoon(it, cfg);
                         if (highlight) { ImGui.PushStyleColor(Dalamud.Bindings.ImGui.ImGuiCol.Text, acc); }
                         ImGui.Text(rem ?? string.Empty);
@@ -220,6 +220,32 @@ namespace XIVSubmarinesReturn.UI
                 ImGui.EndTable();
             }
             ImGui.PopStyleColor(3);
+        }
+
+        private static string BuildRemainingNow(SubmarineRecord it)
+        {
+            try
+            {
+                int minsLeft = int.MaxValue;
+                if (it.EtaUnix.HasValue && it.EtaUnix.Value > 0)
+                {
+                    var eta = DateTimeOffset.FromUnixTimeSeconds(it.EtaUnix.Value);
+                    minsLeft = (int)Math.Round((eta - DateTimeOffset.Now).TotalMinutes);
+                }
+                else if (it.Extra != null && it.Extra.TryGetValue("RemainingText", out var rem) && !string.IsNullOrWhiteSpace(rem))
+                {
+                    var m = Regex.Match(rem, @"(?:(?<h>\d+)\s*時間)?\s*(?<m>\d+)\s*分");
+                    if (m.Success)
+                    {
+                        int h = m.Groups["h"].Success ? int.Parse(m.Groups["h"].Value) : 0;
+                        int mm = m.Groups["m"].Success ? int.Parse(m.Groups["m"].Value) : 0;
+                        minsLeft = h * 60 + mm;
+                    }
+                }
+                if (minsLeft <= 0) return "0分";
+                return minsLeft < 60 ? $"{minsLeft}分" : $"{minsLeft / 60}時間{minsLeft % 60}分";
+            }
+            catch { return string.Empty; }
         }
 
         private static bool IsSoon(SubmarineRecord it, Configuration cfg)
@@ -302,4 +328,3 @@ namespace XIVSubmarinesReturn.UI
         }
     }
 }
-

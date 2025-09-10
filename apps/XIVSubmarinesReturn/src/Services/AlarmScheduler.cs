@@ -19,9 +19,6 @@ namespace XIVSubmarinesReturn.Services
         private readonly Dalamud.Plugin.Services.IToastGui _toast;
         private readonly Dalamud.Plugin.Services.IPluginLog _log;
         private readonly IDiscordNotifier _discord;
-#if XSR_FEAT_GCAL
-        private readonly IGoogleCalendarClient _gcal;
-#endif
         private readonly INotionClient? _notion;
 
         private readonly object _gate = new();
@@ -34,15 +31,9 @@ namespace XIVSubmarinesReturn.Services
             Dalamud.Plugin.Services.IToastGui toast,
             Dalamud.Plugin.Services.IPluginLog log,
             IDiscordNotifier discord,
-#if XSR_FEAT_GCAL
-            IGoogleCalendarClient gcal,
-#endif
             INotionClient? notion = null)
         {
             _cfg = cfg; _chat = chat; _toast = toast; _log = log; _discord = discord;
-#if XSR_FEAT_GCAL
-            _gcal = gcal;
-#endif
             _notion = notion;
         }
 
@@ -65,20 +56,6 @@ namespace XIVSubmarinesReturn.Services
                     catch (Exception ex) { _log.Warning(ex, "Discord snapshot task failed"); }
                 });
 
-                // Google Calendar upsert（非同期）
-                // Google Calendar upsert (optional)
-#if XSR_FEAT_GCAL
-                _ = Task.Run(async () =>
-                {
-                    try
-                    {
-                        var items = SelectForCalendar(snap);
-                        await _gcal.UpsertEventsAsync(items, _cfg.GoogleEventMode).ConfigureAwait(false);
-                    }
-                    catch (Exception ex) { _log.Warning(ex, "GCal upsert task failed"); }
-                });
-
-#endif
                 // Notion upsert（非同期）
                 _ = Task.Run(async () =>
                 {
@@ -148,19 +125,5 @@ var hadPrev = _prevMins.TryGetValue(idKey, out var prevMins);
             }
         }
 
-        private IEnumerable<SubmarineRecord> SelectForCalendar(SubmarineSnapshot snap)
-        {
-            try
-            {
-                if (_cfg.GoogleEventMode == CalendarMode.Latest)
-                {
-                    var it = snap.Items.Where(x => x.EtaUnix.HasValue).OrderBy(x => x.EtaUnix!.Value).FirstOrDefault();
-                    if (it != null) return new[] { it };
-                }
-                return snap.Items;
-            }
-            catch { return snap.Items; }
-        }
     }
 }
-

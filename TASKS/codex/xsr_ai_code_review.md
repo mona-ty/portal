@@ -56,7 +56,7 @@ AIコードレビュー（XIV Submarines Return）
   - CS8604: SectorResolver.cs(133,45) Null 参照引数の可能性（`row`）
   - CS8601: Plugin.cs(515,56) Null 参照代入の可能性
   - CS8602: Plugin.cs(574,35) null 参照の可能性の逆参照
-  - CS0169: Plugin._gcal/Plugin._revealGcalRefresh/Plugin._revealGcalSecret/AlarmTab._revealGcalRefresh/AlarmTab._revealGcalSecret（未使用）
+  - CS0169: 未使用フィールド（現状は解消済み）
   - CS0414: Plugin._sortField/_sortAsc（割当されるが未使用）
 
 実行ログ/デバッグ（変更関連）
@@ -80,4 +80,3 @@ AIコードレビュー（XIV Submarines Return）
 付録（ビルド出力）
 - 出力DLL: `apps/XIVSubmarinesReturn/bin/x64/Release/net9.0-windows/XIVSubmarinesReturn.dll`
 - 日時: 自動ビルド時刻に更新済み
-

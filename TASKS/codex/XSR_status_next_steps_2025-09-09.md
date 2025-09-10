@@ -2,7 +2,7 @@
 
 要点
 - 現状: v0.1.1。UI/メモリの両経路で取得し JSON 出力、Discord/Notion 連携、オプションで自動取得を実装済み。
-- 安定度: 取得/JSON/表UI/自動取得/Discord/Notion は安定。Google Calendar はビルドフラグで既定オフ。
+- 安定度: 取得/JSON/表UI/自動取得/Discord/Notion は安定。Google Calendar は非対応（機能廃止）。
 - 残課題: 旧UIコードの整理、メッセージ整合、軽微な文字化け、README/配布手順の更新。
 
 現在の実装状況（抜粋）
@@ -37,7 +37,6 @@
 
 確認事項
 - 最優先は「体験の整合（文言/UI整理）」で良いか、または配布手順の整備を先行させるか。
-- 外部連携で直近重視するのは Discord / Notion / Google のどれか。
+- 外部連携で直近重視するのは Discord / Notion のどれか。
 
 以上。
-

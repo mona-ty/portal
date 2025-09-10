@@ -89,7 +89,7 @@ XsrDebug.Log(Config, $"S{slot} route mem=[{string.Join(",", memNums)}], cache=[{
 - 成功（0エラー/11警告）
 - 警告内訳（主なもの）
   - CS8604/CS8601/CS8602: Null許容関連（NotionClient/SectorResolver/Plugin）
-  - CS0169: 未使用フィールド（_gcal/_revealGcal* など）
+  - CS0169: 未使用フィールド（現状は解消済み）
   - CS0414: 値割当のみ（_sortField/_sortAsc）
 
 検証方法（手動）
@@ -111,4 +111,3 @@ XsrDebug.Log(Config, $"S{slot} route mem=[{string.Join(",", memNums)}], cache=[{
 補足（ログ位置）
 - 抽出ログ: `%AppData%/XIVSubmarinesReturn/bridge/extract_log.txt`
 - 追加デバッグ: XsrDebug.Log（設定のDebugLoggingが有効な場合）
-

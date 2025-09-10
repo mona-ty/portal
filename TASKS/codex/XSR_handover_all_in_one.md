@@ -3,7 +3,7 @@
 この文書は、現時点までのすべての実装内容を簡潔かつ網羅的にまとめ、次回のCodexが短時間で追従できるようにするためのハンドオーバーです。
 
 ## 1. プロジェクト概要 / 目的
-- 目的: ゲーム内の潜水艦一覧を抽出し、JSONブリッジに出力。Discord/Notion（任意でGoogle Calendar）連携やアラーム通知、UI表示を提供。
+- 目的: ゲーム内の潜水艦一覧を抽出し、JSONブリッジに出力。Discord/Notion 連携やアラーム通知、UI表示を提供。
 - 追加の価値: ルート表記（M>R>…）の人間可読化、Mogshipの完全対応表取り込み、/svコマンド群で運用補助、使いやすいUI（Docking対応・ETA強調・アクセント色・FontScale）。
 
 ## 2. 現状の主な機能
@@ -11,7 +11,7 @@
 - セクター解決（Excel + Alias JSON）＋ Mogship Trip Planner API からの完全対応表取込
 - /sv コマンド群（test/debug/export-sectors/import-alias）
 - UI拡張（Docking、トップバー、表の強化、外観設定：FontScale/ETA強調/Accent色）
-- JSONブリッジ出力（BridgeWriter）／既存のDiscord/Notion/GCal/ゲーム内アラーム連携
+- JSONブリッジ出力（BridgeWriter）／既存のDiscord/Notion/ゲーム内アラーム連携
 
 ## 3. 重要ファイルと責務
 - UI
@@ -31,7 +31,7 @@
 - コマンド
   - `src/Commands/SectorCommands.cs`（`/sv test|debug|export-sectors|import-alias`）
 - 既存サービス
-  - `src/Services/*.cs`（Discord/Notion/GoogleCalendar/EtaFormatter、既存改善を維持）
+  - `src/Services/*.cs`（Discord/Notion/EtaFormatter、既存改善を維持）
 - モデル/ブリッジ
   - `src/Models.cs`（`SubmarineRecord`/`SubmarineSnapshot`）
   - `src/BridgeWriter.cs`（JSON出力とレガシーパスへのコピー）

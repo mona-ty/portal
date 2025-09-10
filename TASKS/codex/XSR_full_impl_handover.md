@@ -1,7 +1,7 @@
 # XIV Submarines Return 実装ハンドオーバー（現状まとめ）
 
 ## 要点
-- 目的: 潜水艦一覧の抽出→JSONブリッジ、Discord/Notion/（任意GCal）連携、アラーム、UI表示強化。
+- 目的: 潜水艦一覧の抽出→JSONブリッジ、Discord/Notion 連携、アラーム、UI表示強化。
 - 主要追加: ルート表記切替、セクター解決（Excel+Alias）、Mogship取込、/svコマンド群、UI拡張（Docking/トップバー/ETA強調/FontScale/Accent）。
 - 影響範囲: `apps/XIVSubmarinesReturn` 配下一式（UI/Services/Sectors/Commands/設定）。
 
@@ -41,7 +41,7 @@
   - `.gitignore` に `/apps/XIVSubmarinesReturn/_external/` を追加（リポジトリ外管理）。
 
 - 既存連携
-  - Discord/Notion/アラーム機能は維持。Notion/GCal は従来ロジック（429リトライ等）を踏襲。
+  - Discord/Notion/アラーム機能を維持（GCal は廃止）。
 
 ---
 
@@ -58,7 +58,7 @@
 - コマンド
   - `src/Commands/SectorCommands.cs`: `/sv test|debug|export-sectors|import-alias`。
 - サービス（既存）
-  - `src/Services/*.cs`: Discord/Notion/GoogleCalendar/EtaFormatter 等。
+  - `src/Services/*.cs`: Discord/Notion/EtaFormatter 等。
 - 設定/モデル
   - `src/Configuration.cs`: 既存＋UI/Resolver用の新規キー（後述）。
   - `src/Models.cs`: `SubmarineRecord`/`SubmarineSnapshot`。
@@ -130,4 +130,3 @@
   - `.gitignore`（外部取得物の除外）
 
 以上（次のCodex向けハンドオーバー）。
-

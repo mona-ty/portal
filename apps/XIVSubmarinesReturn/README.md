@@ -37,6 +37,16 @@ Settings UI
 3) ビルド（Release/x64）:
    `dotnet build apps\XIVSubmarinesReturn\XIVSubmarinesReturn.csproj -c Release -p:Platform=x64`
 
+GitHub Actions（単独リポ想定）
+- CI: push/PR で Release x64 ビルド（`.github/workflows/ci.yml`）
+- リリース: tag `vX.Y.Z` で `latest.zip` を生成し GitHub Release に添付（`.github/workflows/release.yml`）
+  - `-p:MakeZip=true` で `DalamudPackager` を有効化
+  - 添付: `latest.zip`, `manifest.json`, `icon.png`
+
+配布（手動）
+- 開発中の動作確認: `XIVLauncher\devPlugins\XIVSubmarinesReturn` へ DLL/manifest/icon を配置
+- 公開配布: GitHub Release の `latest.zip` を配布（公式リポへ提出する場合は各自ガイドに従ってください）
+
 配置（devPlugins）
 - フォルダ: `%AppData%\XIVLauncher\devPlugins\XIVSubmarinesReturn`
 - 配置物: `XIVSubmarinesReturn.dll`（manifest は DLL に埋め込み）

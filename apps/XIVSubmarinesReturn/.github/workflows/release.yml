@@ -1,0 +1,46 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+      - name: Align manifest (RepoUrl, AssemblyVersion) from tag
+        shell: pwsh
+        run: |
+          $ver = "${{ github.ref_name }}" -replace '^v',''
+          $repo = "https://github.com/${{ github.repository }}"
+          $path = Join-Path $PWD 'manifest.json'
+          $json = Get-Content $path -Raw | ConvertFrom-Json
+          $json.RepoUrl = $repo
+          $json.AssemblyVersion = $ver
+          $json | ConvertTo-Json -Depth 4 | Set-Content $path -Encoding UTF8
+          Write-Host "Manifest updated: RepoUrl=$repo, AssemblyVersion=$ver"
+      - name: Build (Release x64 + package)
+        run: |
+          $ver = "${{ github.ref_name }}" -replace '^v',''
+          dotnet build ./XIVSubmarinesReturn.csproj -c Release -p:Platform=x64 -p:MakeZip=true -p:Version=$ver -p:AssemblyVersion=$ver -p:FileVersion=$ver --nologo
+          echo "::group::Locate artifacts"
+          dir .\bin\Release\net9.0-windows /s
+          echo "::endgroup::"
+        working-directory: ${{ github.workspace }}
+      - name: Upload Release Assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            bin/Release/net9.0-windows/XIVSubmarinesReturn/latest.zip
+            bin/x64/Release/net9.0-windows/manifest.json
+            bin/x64/Release/net9.0-windows/icon.png
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

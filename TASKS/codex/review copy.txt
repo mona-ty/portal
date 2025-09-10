@@ -22,8 +22,7 @@
 
 **UI（ImGui）**
 
-* 主要トグル（Auto-capture、Memory fallback ほか）、アドオン名、スロット別エイリアス編集、Discord/Notion セクション（Test ボタンあり）、Alarm リード分、簡易テーブル（Name/Rank/ETA(min)/Route）、ルート名マップ編集、Probe 出力、Debug 操作などが **1ウィンドウ** に縦積みで配置されています。GCal セクションは `#if XSR_FEAT_GCAL` で非表示化済み（ソフト無効化）。
-  ↪ `AlarmScheduler` 側でも GCal 呼び出しがコンパイルガード下にあります。
+* 主要トグル（Auto-capture、Memory fallback ほか）、アドオン名、スロット別エイリアス編集、Discord/Notion セクション（Test ボタンあり）、Alarm リード分、簡易テーブル（Name/Rank/ETA(min)/Route）、ルート名マップ編集、Probe 出力、Debug 操作などが **1ウィンドウ** に縦積みで配置されています。
 
 **既定値（抜粋）**
 
@@ -179,7 +178,7 @@ if (ImGui.BeginTabBar("xsr-tabs")) {
 
 * Discord/Notion セクション下に 429 とタイムゾーンに関する短い注記を追加（“Retry-After 準拠”“JST 固定”）。  ([Discord][1], [Notion Developers][2])
 
-> 参考：これまでの改修サマリ（Notion v2/Identity v3/GCal ソフト無効化/Discord 色付け 等）は **NEXT\_XSR\_PLAN\_v2** にも整理済みです。今回の UI 再設計はその仕上げに相当します。
+> 参考：これまでの改修サマリ（Notion v2/Identity v3/Discord 色付け 等）は **NEXT\_XSR\_PLAN\_v2** にも整理済みです。今回の UI 再設計はその仕上げに相当します。
 
 ---
 
@@ -189,7 +188,7 @@ if (ImGui.BeginTabBar("xsr-tabs")) {
 * ETA/残り/短縮ルートの生成ロジック（`EtaLocal` / `RemainingText` / `RouteShort`）。
 * Discord の埋め込み色と 429 待機（Retry-After）実装。
 * Notion の `time_zone:"Asia/Tokyo"` 付与と ExtId（安定キー）の付与。
-* UI 構成（各セクション・Test ボタン・GCal 非表示化）。
+* UI 構成（各セクション・Test ボタン）。
 
 ---
 

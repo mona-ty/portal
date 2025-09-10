@@ -11,10 +11,6 @@ namespace XIVSubmarinesReturn.UI
     {
         private static bool _revealDiscord;
         private static bool _revealNotion;
-        #if XSR_FEAT_GCAL
-        private static bool _revealGcalRefresh;
-        private static bool _revealGcalSecret;
-        #endif
 
         internal static void Draw(Plugin p)
         {
@@ -124,27 +120,6 @@ namespace XIVSubmarinesReturn.UI
                 ImGui.SameLine(); if (ImGui.SmallButton("テスト送信")) { p.Ui_TestNotion(); }
             }
 
-#if XSR_FEAT_GCAL
-            // Google Calendar (optional)
-            using (Widgets.Card("card_gcal"))
-            {
-                Widgets.SectionHeader("Google Calendar");
-                var gEnable = p.Config.GoogleEnabled;
-                Widgets.StatusPill(gEnable, "Enabled", "Disabled"); ImGui.SameLine();
-                if (ImGui.Checkbox("有効", ref gEnable)) { p.Config.GoogleEnabled = gEnable; p.SaveConfig(); }
-                int modeVal = p.Config.GoogleEventMode == CalendarMode.Latest ? 1 : 0;
-                if (ImGui.RadioButton("All", modeVal == 0)) { p.Config.GoogleEventMode = CalendarMode.All; p.SaveConfig(); modeVal = 0; }
-                ImGui.SameLine(); if (ImGui.RadioButton("Latest only", modeVal == 1)) { p.Config.GoogleEventMode = CalendarMode.Latest; p.SaveConfig(); modeVal = 1; }
-                var calId = p.Config.GoogleCalendarId ?? string.Empty;
-                if (ImGui.InputText("CalendarId", ref calId, 128)) { p.Config.GoogleCalendarId = calId; p.SaveConfig(); }
-                var rt = p.Config.GoogleRefreshToken ?? string.Empty;
-                if (Widgets.MaskedInput("RefreshToken", ref rt, 256, ref _revealGcalRefresh)) { p.Config.GoogleRefreshToken = rt; p.SaveConfig(); }
-                var cid = p.Config.GoogleClientId ?? string.Empty;
-                if (ImGui.InputText("ClientId", ref cid, 256)) { p.Config.GoogleClientId = cid; p.SaveConfig(); }
-                var cs = p.Config.GoogleClientSecret ?? string.Empty;
-                if (Widgets.MaskedInput("ClientSecret", ref cs, 256, ref _revealGcalSecret)) { p.Config.GoogleClientSecret = cs; p.SaveConfig(); }
-            }
-#endif
         }
     }
 }

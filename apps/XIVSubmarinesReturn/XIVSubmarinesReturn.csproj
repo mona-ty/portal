@@ -87,7 +87,6 @@
     <Compile Include="src\Services\EtaFormatter.cs" />
     <Compile Include="src\Services\AlarmScheduler.cs" />
     <Compile Include="src\Services\DiscordNotifier.cs" />
-    <Compile Include="src\Services\GoogleCalendarClient.cs" />
     <Compile Include="src\Services\XsrDebug.cs" />
     <Compile Include="src\Services\NotionClient.cs" />
     <Compile Include="src\UI\Theme.cs" />

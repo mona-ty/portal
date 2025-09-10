@@ -99,4 +99,4 @@ XIV Submarines Return
 - `dumptree`: 最後に `-- SelectString items --` として候補一覧を列挙します。
 
 開発ドキュメント
-- 詳細なアーキテクチャ、JSON スキーマ、外部連携（Discord/Notion/任意で Google Calendar）については `DEVELOPMENT.md` を参照してください。
+- 詳細なアーキテクチャ、JSON スキーマ、外部連携（Discord/Notion）については `DEVELOPMENT.md` を参照してください。

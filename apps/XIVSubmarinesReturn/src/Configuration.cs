@@ -3,7 +3,6 @@ using Dalamud.Plugin;
 
 namespace XIVSubmarinesReturn;
 
-public enum CalendarMode { All, Latest }
 
 public enum RouteDisplayMode { Letters, ShortIds, Raw }
 
@@ -82,14 +81,6 @@ public class Configuration : IPluginConfiguration
     // Discord embeds (duplicated below for grouping – keep single definition)
     // public bool DiscordUseEmbeds { get; set; } = false;
 
-    // Google Calendar settings
-    public bool GoogleEnabled { get; set; } = false;
-    public CalendarMode GoogleEventMode { get; set; } = CalendarMode.All;
-    public string GoogleRefreshToken { get; set; } = string.Empty;
-    public string GoogleClientId { get; set; } = string.Empty;
-    public string GoogleClientSecret { get; set; } = string.Empty;
-    public string GoogleCalendarId { get; set; } = "primary";
-    public System.Collections.Generic.List<int> GoogleReminderMinutes { get; set; } = new() { 0 };
 
     // Discord settings
     public bool DiscordEnabled { get; set; } = false;

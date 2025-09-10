@@ -29,7 +29,7 @@ XIV Submarines Return — コードレビュー依頼テンプレート（特化
 - 変更範囲
   - コミット/ブランチ: <ID/名前>
   - 種別: <新規/改修/リファクタ/バグ修正/実験フラグ>
-  - 影響領域: <UI(Overview/Alarm/Debug)/Extractor/Bridge/Services(Discord/Notion/GCal)/Commands>
+  - 影響領域: <UI(Overview/Alarm/Debug)/Extractor/Bridge/Services(Discord/Notion)/Commands>
 
 - 実装方針・設計（必須）
   - 方針: <ImGui UI構成、IFramework.Updateのポーリング間隔、抽出アルゴリズム、Fallback条件>
@@ -45,7 +45,7 @@ XIV Submarines Return — コードレビュー依頼テンプレート（特化
     - `src/Plugin.UI.cs`（ImGui UI）
     - `src/Extractors.cs`（UI/SelectString抽出）
     - `src/BridgeWriter.cs`（JSON出力: submarines.json）
-    - `src/Services/*`（AlarmScheduler/Discord/GoogleCalendar/Notion）
+    - `src/Services/*`（AlarmScheduler/Discord/Notion）
   - 設定/フラグ: `Local.props`（`DalamudLibPath`）、プラグイン設定（メモリ/フォールバック等）
 
 - 差分ハイライト
@@ -76,11 +76,11 @@ XIV Submarines Return — コードレビュー依頼テンプレート（特化
 
 - セキュリティ・コンプライアンス
   - 入力検証/サニタイズ: <UIテキスト/外部入力>
-  - 機微情報: Discord/Webhook, Notion/GCal トークン（必ずマスク）
+  - 機微情報: Discord/Webhook, Notion トークン（必ずマスク）
   - 依存スキャン/ライセンス: <該当なし/結果>
 
 - API/外部連携
-  - Discord/Notion/Google Calendar: <使用有無/タイムアウト/リトライ/失敗時のUI通知>
+  - Discord/Notion: <使用有無/タイムアウト/リトライ/失敗時のUI通知>
   - JSONブリッジ: フォーマット/互換性/移行の有無
 
 - リリース計画
@@ -107,7 +107,7 @@ XIV Submarines Return — コードレビュー依頼テンプレート（特化
   - Q1: `IFramework.Update` 内の抽出頻度と負荷は適切？
   - Q2: `SelectString` 抽出の境界条件（ソート/フィルタ/言語差）に漏れは？
   - Q3: `BridgeWriter` のJSONスキーマは将来互換を保てる？
-  - Q4: 外部通知（Discord/Notion/GCal）の失敗時リトライ/バックオフ設計は適切？
+  - Q4: 外部通知（Discord/Notion）の失敗時リトライ/バックオフ設計は適切？
 
 送付前チェックリスト
 - 機微情報（トークン/ID）はマスクした
@@ -122,4 +122,3 @@ XIV Submarines Return — コードレビュー依頼テンプレート（特化
 - 実行（ゲーム内）: `/xsr help`, `/xsr dump`, `/xsr open`, `/xsr addon <name>`, `/xsr version`, `/xsr ui`
 - 収集（汎用）: `pwsh scripts/collect_review_bundle.ps1 -ProjectRoot 'apps/XIVSubmarinesReturn' -AppName 'XIVSubmarinesReturn' -LogPaths 'apps/XIVSubmarinesReturn/log',"$env:AppData\XIVSubmarinesReturn\bridge"`
 - 収集（特化）: `pwsh scripts/collect_xsr_review.ps1`
-

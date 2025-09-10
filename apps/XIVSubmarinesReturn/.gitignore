@@ -1,0 +1,20 @@
+# Build outputs
+bin/
+obj/
+
+# VS/IDE
+.vs/
+.idea/
+.vscode/
+
+# Runtime logs and externals
+log/
+_external/
+tmp/
+workspace/
+external/
+
+# OS
+Thumbs.db
+Desktop.ini
+

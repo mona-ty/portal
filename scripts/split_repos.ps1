@@ -28,7 +28,8 @@ $repos = @(
   @{ name = 'ff14-submarines'; desc = 'FF14 submarine OCR + Google Calendar tool'; path = 'apps/ff14-submarines' },
   @{ name = 'pomodoro-cli'; desc = 'Simple Pomodoro timer CLI in Python'; path = 'apps/pomodoro-cli' },
   @{ name = 'liftlog-ios'; desc = 'iOS SwiftUI strength training log (scaffold)'; path = 'apps/liftlog-ios' },
-  @{ name = 'mahjong-scorer-ios'; desc = 'iOS SwiftUI Mahjong scoring app (scaffold)'; path = 'apps/mahjong-scorer-ios' }
+  @{ name = 'mahjong-scorer-ios'; desc = 'iOS SwiftUI Mahjong scoring app (scaffold)'; path = 'apps/mahjong-scorer-ios' },
+  @{ name = 'xiv-submarines-return'; desc = 'Dalamud plugin: capture company workshop submarine list to JSON; Discord/Notion integration'; path = 'apps/XIVSubmarinesReturn' }
 )
 
  # Remember starting ref to restore after temporary checkouts

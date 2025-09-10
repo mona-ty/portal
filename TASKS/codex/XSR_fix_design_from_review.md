@@ -2,7 +2,7 @@
 
 ## 目的/スコープ
 - UIの操作性と視認性を強化し、ルート/セクター機能と連携した一連の操作（取得→表示→連携）が素早く行えるようにする。
-- 既存機能（Discord/Notion/アラーム/GCal）の互換性維持。
+- 既存機能（Discord/Notion/アラーム）の互換性維持（GCal は廃止）。
 
 ---
 
@@ -100,7 +100,7 @@ F) コマンド
 ## テスト/検証
 - 単体: `SnapshotTable` 並び替え/フィルタ/コピー/強調の境界値（ETA=0/負/残り文言のみ）
 - 結合: 取込→`/sv debug`→表のレター表示（Deep-sea Site, ほか複数海域）
-- 回帰: Discord/Notion/アラーム/GCal の主要フロー
+- 回帰: Discord/Notion/アラーム の主要フロー
 - UI: Docking有効環境での挙動、FontScale/Accentの即時反映
 
 ---

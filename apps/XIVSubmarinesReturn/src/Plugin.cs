@@ -46,9 +46,6 @@ public sealed partial class Plugin : IDalamudPlugin
 
     private AlarmScheduler? _alarm;
     private DiscordNotifier? _discord;
-    #if XSR_FEAT_GCAL
-    private GoogleCalendarClient? _gcal;
-    #endif
     private NotionClient? _notion;
     private SectorResolver? _sectorResolver;
     private Commands.SectorCommands? _sectorCommands;
@@ -140,12 +137,7 @@ public sealed partial class Plugin : IDalamudPlugin
             }
             catch { }
 
-#if XSR_FEAT_GCAL
-            _gcal = new GoogleCalendarClient(Config, _log, http);
-            _alarm = new AlarmScheduler(Config, _chat, _toast, _log, _discord, _gcal, _notion);
-#else
             _alarm = new AlarmScheduler(Config, _chat, _toast, _log, _discord, _notion);
-#endif
         }
         catch { }
     }

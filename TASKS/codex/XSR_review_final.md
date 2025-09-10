@@ -23,7 +23,7 @@
   - Snapshotテーブル: Slot | Name | Rank | ETA(Local) | Remaining | Route（リサイズ可）
 - 基盤
   - 共有HttpClient + User-Agent（XIVSubmarinesReturn/<ver>）
-  - GCalを `#if XSR_FEAT_GCAL` でガード（標準ビルド非依存）
+  - Google Calendar 機能を削除（外部連携は Discord/Notion に統一）
 - Packaging（P4）
   - `SkipPack`/`MakeZip` でzip生成を制御（ロック回避運用）
 
@@ -51,8 +51,8 @@
 - src/Configuration.cs（NotionKeyMode）
 - src/Services/NotionClient.cs（StableId切替、Validate、ログ簡潔化）
 - src/Plugin.UI.cs（TabBar追加、Snapshotテーブル拡張）
-- src/Plugin.cs（共有HttpClient+UA、GCalガード、ダンプ出力の日本語化）
-- src/Services/AlarmScheduler.cs（遷移検出・日本語出力、GCalガード）
+- src/Plugin.cs（共有HttpClient+UA、ダンプ出力の日本語化）
+- src/Services/AlarmScheduler.cs（遷移検出・日本語出力、GCalコード削除）
 - src/Services/DiscordNotifier.cs（429 Jitter/上限、日本語統一）
 - src/Services/EtaFormatter.cs（RemainingText 日本語化・重複除去）
 - src/Extractors.cs（Parser薄ラッパー化）

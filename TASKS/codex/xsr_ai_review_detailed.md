@@ -297,12 +297,7 @@ public sealed partial class Plugin : IDalamudPlugin
             }
             catch { }
 
-#if XSR_FEAT_GCAL
-            _gcal = new GoogleCalendarClient(Config, _log, http);
-            _alarm = new AlarmScheduler(Config, _chat, _log, _discord, _gcal, _notion);
-#else
             _alarm = new AlarmScheduler(Config, _chat, _log, _discord, _notion);
-#endif
         }
         catch { }
     }
@@ -1670,35 +1665,7 @@ public sealed partial class Plugin
 
                     try { DrawSnapshotTable2(); } catch { }
 
-#if XSR_FEAT_GCAL
-                    // Google Calendar (soft-disabled)
-                    if (ImGui.CollapsingHeader("Google Calendar"))
-                    {
-                        bool gEnable = Config.GoogleEnabled;
-                        if (ImGui.Checkbox("Enable", ref gEnable)) { Config.GoogleEnabled = gEnable; SaveConfig(); }
-                        int modeVal = Config.GoogleEventMode == CalendarMode.Latest ? 1 : 0;
-                        if (ImGui.RadioButton("All", modeVal == 0)) { Config.GoogleEventMode = CalendarMode.All; SaveConfig(); }
-                        ImGui.SameLine();
-                        if (ImGui.RadioButton("Latest only", modeVal == 1)) { Config.GoogleEventMode = CalendarMode.Latest; SaveConfig(); }
-                        var calId = Config.GoogleCalendarId ?? string.Empty;
-                        if (ImGui.InputText("CalendarId", ref calId, 128)) { Config.GoogleCalendarId = calId; SaveConfig(); }
-                        var rt = Config.GoogleRefreshToken ?? string.Empty;
-                        if (Widgets.MaskedInput("RefreshToken", ref rt, 256, ref _revealGcalRefresh)) { Config.GoogleRefreshToken = rt; SaveConfig(); }
-                        var cid = Config.GoogleClientId ?? string.Empty;
-                        if (ImGui.InputText("ClientId", ref cid, 256)) { Config.GoogleClientId = cid; SaveConfig(); }
-                        var cs = Config.GoogleClientSecret ?? string.Empty;
-                        if (Widgets.MaskedInput("ClientSecret", ref cs, 256, ref _revealGcalSecret)) { Config.GoogleClientSecret = cs; SaveConfig(); }
-                        if (ImGui.Button("Test Google"))
-                        {
-                            try
-                            {
-                                bool ok = _gcal != null && _gcal.EnsureAuthorizedAsync().GetAwaiter().GetResult();
-                                _uiStatus = ok ? "GCal auth OK" : "GCal not ready";
-                            }
-                            catch (System.Exception ex) { _uiStatus = $"GCal test failed: {ex.Message}"; }
-                        }
-                    }
-#endif
+                    // (Google Calendar 機能は廃止済み)
 
                     __OV_END: ImGui.EndTabItem();
                 }
@@ -2088,35 +2055,7 @@ public sealed partial class Plugin
             }
             // (old Overview block removed)
 
-            // Google Calendar (soft-disabled) — stays in Overview
-#if XSR_FEAT_GCAL
-            if (false && ImGui.CollapsingHeader("Google Calendar"))
-            {
-                bool gEnable = Config.GoogleEnabled;
-                if (ImGui.Checkbox("Enable", ref gEnable)) { Config.GoogleEnabled = gEnable; SaveConfig(); }
-                int modeVal = Config.GoogleEventMode == CalendarMode.Latest ? 1 : 0;
-                if (ImGui.RadioButton("All", modeVal == 0)) { Config.GoogleEventMode = CalendarMode.All; SaveConfig(); }
-                ImGui.SameLine();
-                if (ImGui.RadioButton("Latest only", modeVal == 1)) { Config.GoogleEventMode = CalendarMode.Latest; SaveConfig(); }
-                var calId = Config.GoogleCalendarId ?? string.Empty;
-                if (ImGui.InputText("CalendarId", ref calId, 128)) { Config.GoogleCalendarId = calId; SaveConfig(); }
-                var rt = Config.GoogleRefreshToken ?? string.Empty;
-                if (Widgets.MaskedInput("RefreshToken", ref rt, 256, ref _revealGcalRefresh)) { Config.GoogleRefreshToken = rt; SaveConfig(); }
-                var cid = Config.GoogleClientId ?? string.Empty;
-                if (ImGui.InputText("ClientId", ref cid, 256)) { Config.GoogleClientId = cid; SaveConfig(); }
-                var cs = Config.GoogleClientSecret ?? string.Empty;
-                if (Widgets.MaskedInput("ClientSecret", ref cs, 256, ref _revealGcalSecret)) { Config.GoogleClientSecret = cs; SaveConfig(); }
-                if (ImGui.Button("Test Google"))
-                {
-                    try
-                    {
-                        bool ok = _gcal != null && _gcal.EnsureAuthorizedAsync().GetAwaiter().GetResult();
-                        _uiStatus = ok ? "GCal auth OK" : "GCal not ready";
-                    }
-                    catch (System.Exception ex) { _uiStatus = $"GCal test failed: {ex.Message}"; }
-                }
-            }
-#endif
+            // (Google Calendar 機能は廃止済み)
 
             // Discord (moved under Alarm tab)
             if (false && ImGui.CollapsingHeader("Discord"))

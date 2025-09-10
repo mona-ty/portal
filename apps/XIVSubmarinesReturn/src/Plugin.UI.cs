@@ -345,10 +345,6 @@ public sealed partial class Plugin
         catch (Exception ex) { _uiStatus = $"Notion test failed: {ex.Message}"; }
     }
     private bool _revealNotionToken;
-    #if XSR_FEAT_GCAL
-    private bool _revealGcalRefresh;
-    private bool _revealGcalSecret;
-    #endif
 
     private void InitUI()
     {
@@ -480,38 +476,8 @@ public sealed partial class Plugin
                         }
                     }
                     catch { }
-
+                    
                     try { DrawSnapshotTable2(); } catch { }
-
-#if XSR_FEAT_GCAL
-                    // Google Calendar (soft-disabled)
-                    if (ImGui.CollapsingHeader("Google Calendar"))
-                    {
-                        bool gEnable = Config.GoogleEnabled;
-                        if (ImGui.Checkbox("Enable", ref gEnable)) { Config.GoogleEnabled = gEnable; SaveConfig(); }
-                        int modeVal = Config.GoogleEventMode == CalendarMode.Latest ? 1 : 0;
-                        if (ImGui.RadioButton("All", modeVal == 0)) { Config.GoogleEventMode = CalendarMode.All; SaveConfig(); }
-                        ImGui.SameLine();
-                        if (ImGui.RadioButton("Latest only", modeVal == 1)) { Config.GoogleEventMode = CalendarMode.Latest; SaveConfig(); }
-                        var calId = Config.GoogleCalendarId ?? string.Empty;
-                        if (ImGui.InputText("CalendarId", ref calId, 128)) { Config.GoogleCalendarId = calId; SaveConfig(); }
-                        var rt = Config.GoogleRefreshToken ?? string.Empty;
-                        if (Widgets.MaskedInput("RefreshToken", ref rt, 256, ref _revealGcalRefresh)) { Config.GoogleRefreshToken = rt; SaveConfig(); }
-                        var cid = Config.GoogleClientId ?? string.Empty;
-                        if (ImGui.InputText("ClientId", ref cid, 256)) { Config.GoogleClientId = cid; SaveConfig(); }
-                        var cs = Config.GoogleClientSecret ?? string.Empty;
-                        if (Widgets.MaskedInput("ClientSecret", ref cs, 256, ref _revealGcalSecret)) { Config.GoogleClientSecret = cs; SaveConfig(); }
-                        if (ImGui.Button("Test Google"))
-                        {
-                            try
-                            {
-                                bool ok = _gcal != null && _gcal.EnsureAuthorizedAsync().GetAwaiter().GetResult();
-                                _uiStatus = ok ? "GCal auth OK" : "GCal not ready";
-                            }
-                            catch (System.Exception ex) { _uiStatus = $"GCal test failed: {ex.Message}"; }
-                        }
-                    }
-#endif
 
                     __OV_END: ImGui.EndTabItem();
                 }
@@ -926,35 +892,7 @@ public sealed partial class Plugin
             }
             // (old Overview block removed)
 
-            // Google Calendar (soft-disabled) — stays in Overview
-#if XSR_FEAT_GCAL
-            if (false && ImGui.CollapsingHeader("Google Calendar"))
-            {
-                bool gEnable = Config.GoogleEnabled;
-                if (ImGui.Checkbox("Enable", ref gEnable)) { Config.GoogleEnabled = gEnable; SaveConfig(); }
-                int modeVal = Config.GoogleEventMode == CalendarMode.Latest ? 1 : 0;
-                if (ImGui.RadioButton("All", modeVal == 0)) { Config.GoogleEventMode = CalendarMode.All; SaveConfig(); }
-                ImGui.SameLine();
-                if (ImGui.RadioButton("Latest only", modeVal == 1)) { Config.GoogleEventMode = CalendarMode.Latest; SaveConfig(); }
-                var calId = Config.GoogleCalendarId ?? string.Empty;
-                if (ImGui.InputText("CalendarId", ref calId, 128)) { Config.GoogleCalendarId = calId; SaveConfig(); }
-                var rt = Config.GoogleRefreshToken ?? string.Empty;
-                if (Widgets.MaskedInput("RefreshToken", ref rt, 256, ref _revealGcalRefresh)) { Config.GoogleRefreshToken = rt; SaveConfig(); }
-                var cid = Config.GoogleClientId ?? string.Empty;
-                if (ImGui.InputText("ClientId", ref cid, 256)) { Config.GoogleClientId = cid; SaveConfig(); }
-                var cs = Config.GoogleClientSecret ?? string.Empty;
-                if (Widgets.MaskedInput("ClientSecret", ref cs, 256, ref _revealGcalSecret)) { Config.GoogleClientSecret = cs; SaveConfig(); }
-                if (ImGui.Button("Test Google"))
-                {
-                    try
-                    {
-                        bool ok = _gcal != null && _gcal.EnsureAuthorizedAsync().GetAwaiter().GetResult();
-                        _uiStatus = ok ? "GCal auth OK" : "GCal not ready";
-                    }
-                    catch (System.Exception ex) { _uiStatus = $"GCal test failed: {ex.Message}"; }
-                }
-            }
-#endif
+            // (GCal UI removed)
 
             // Discord (moved under Alarm tab)
             if (false && ImGui.CollapsingHeader("Discord"))
@@ -1228,7 +1166,29 @@ public sealed partial class Plugin
                     try
                     {
                         var etaLoc = (it.Extra != null && it.Extra.TryGetValue("EtaLocal", out var t)) ? t : string.Empty;
-                        var rem = (it.Extra != null && it.Extra.TryGetValue("RemainingText", out var r)) ? r : string.Empty;
+                        string rem = string.Empty;
+                        try
+                        {
+                            int minsLeft = int.MaxValue;
+                            if (it.EtaUnix.HasValue && it.EtaUnix.Value > 0)
+                            {
+                                var eta = DateTimeOffset.FromUnixTimeSeconds(it.EtaUnix.Value);
+                                minsLeft = (int)Math.Round((eta - DateTimeOffset.Now).TotalMinutes);
+                            }
+                            else if (it.Extra != null && it.Extra.TryGetValue("RemainingText", out var r) && !string.IsNullOrWhiteSpace(r))
+                            {
+                                var m2 = System.Text.RegularExpressions.Regex.Match(r, @"(?:(?<h>\d+)\s*時間)?\s*(?<m>\d+)\s*分");
+                                if (m2.Success)
+                                {
+                                    int h = m2.Groups["h"].Success ? int.Parse(m2.Groups["h"].Value) : 0;
+                                    int mm = m2.Groups["m"].Success ? int.Parse(m2.Groups["m"].Value) : 0;
+                                    minsLeft = h * 60 + mm;
+                                }
+                            }
+                            if (minsLeft <= 0) rem = "0分";
+                            else rem = minsLeft < 60 ? $"{minsLeft}分" : $"{minsLeft / 60}時間{minsLeft % 60}分";
+                        }
+                        catch { }
                         var txt = string.IsNullOrWhiteSpace(rem) ? (etaLoc ?? string.Empty) : $"{etaLoc} / {rem}";
                         bool highlight = false;
                         try
