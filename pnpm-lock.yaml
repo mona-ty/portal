@@ -6,4 +6,26 @@ settings:
 
 importers:
 
-  .: {}
+  .:
+    dependencies:
+      openai:
+        specifier: ^5.20.0
+        version: 5.20.0
+
+packages:
+
+  openai@5.20.0:
+    resolution: {integrity: sha512-Bmc2zLM/YWgFrDpXr9hwXqGGDdMmMpE9+qoZPsaHpn0Y/Qk1Vu26hNqXo7+nHdli+sLsXINvS1f8kR3NKhGKmA==}
+    hasBin: true
+    peerDependencies:
+      ws: ^8.18.0
+      zod: ^3.23.8
+    peerDependenciesMeta:
+      ws:
+        optional: true
+      zod:
+        optional: true
+
+snapshots:
+
+  openai@5.20.0: {}
