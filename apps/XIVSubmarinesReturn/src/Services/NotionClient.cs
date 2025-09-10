@@ -32,9 +32,10 @@ namespace XIVSubmarinesReturn.Services
         {
             try
             {
+                if (snap is null) return;
                 if (!_cfg.NotionEnabled) return;
                 if (string.IsNullOrWhiteSpace(_cfg.NotionToken) || string.IsNullOrWhiteSpace(_cfg.NotionDatabaseId)) return;
-                var items = (snap?.Items ?? new List<SubmarineRecord>()).ToList();
+                var items = (snap.Items ?? new List<SubmarineRecord>()).ToList();
                 if (items.Count == 0) return;
                 if (latestOnly)
                 {

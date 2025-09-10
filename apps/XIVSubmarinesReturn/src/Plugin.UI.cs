@@ -27,8 +27,7 @@ public sealed partial class Plugin
     private string _alarmLeadText = string.Empty;
     private string _routeLearnLetters = string.Empty; // e.g., "M>R>O>J>Z"
     private string _filterText = string.Empty;
-    private int _sortField = 3; // 0=Name 1=Slot 2=Rank 3=ETA
-    private bool _sortAsc = true;
+    // removed unused sort fields (were not used)
     private XIVSubmarinesReturn.UI.SnapshotTable _snapTable = new XIVSubmarinesReturn.UI.SnapshotTable();    // reveal toggles for masked inputs
     private bool _revealDiscordWebhook;
     private bool _showLegacyUi = false;
@@ -59,11 +58,214 @@ public sealed partial class Plugin
         }
         catch { }
     }
+
+    // プロファイルセレクタ（簡易）
+    public void Ui_DrawProfileSelector()
+    {
+        try
+        {
+            var list = Config.Profiles ?? new System.Collections.Generic.List<CharacterProfile>();
+            // 表示用に CID=0 のプレースホルダを隠す（他に1件以上ある場合）
+            var display = new System.Collections.Generic.List<CharacterProfile>(list.Count);
+            foreach (var p0 in list)
+            {
+                if (p0.ContentId == 0 && list.Count > 1) continue;
+                display.Add(p0);
+            }
+
+            var names = new System.Collections.Generic.List<string>(Math.Max(1, display.Count));
+            foreach (var p in display)
+            {
+                string disp;
+                var hasName = !string.IsNullOrWhiteSpace(p.CharacterName);
+                var hasWorld = !string.IsNullOrWhiteSpace(p.WorldName);
+                if (hasName && hasWorld) disp = $"{p.CharacterName} @ {p.WorldName}";
+                else if (hasName) disp = p.CharacterName;
+                else if (hasWorld) disp = p.WorldName;
+                else disp = $"CID:0x{p.ContentId:X}";
+                names.Add(disp);
+            }
+            if (names.Count == 0) names.Add("(なし)");
+
+            int curIndex = 0;
+            if (Config.ActiveContentId.HasValue)
+            {
+                var idx = display.FindIndex(x => x.ContentId == Config.ActiveContentId.Value);
+                if (idx >= 0) curIndex = idx;
+            }
+
+            ImGui.TextUnformatted("プロファイル");
+            ImGui.SameLine(180);
+            ImGui.PushItemWidth(260);
+            if (ImGui.Combo("##xsr_prof", ref curIndex, names.ToArray(), names.Count))
+            {
+                if (display.Count > 0)
+                {
+                    var sel = display[Math.Clamp(curIndex, 0, display.Count - 1)];
+                    try { Services.XsrDebug.Log(Config, $"UI: ComboChanged -> cid=0x{sel.ContentId:X}, name='{sel.CharacterName}'"); } catch { }
+                    Config.ActiveContentId = sel.ContentId;
+                    SaveConfig();
+                    try
+                    {
+                        if (sel.LastSnapshot?.Items != null && sel.LastSnapshot.Items.Count > 0)
+                        {
+                            _uiSnapshot = sel.LastSnapshot; _uiLastReadUtc = DateTime.UtcNow; _uiStatus = "プロファイル保存データ";
+                        }
+                        else
+                        {
+                            _uiSnapshot = null; _uiLastReadUtc = DateTime.MinValue; _uiStatus = "このプロファイルの保存データはありません";
+                        }
+                    }
+                    catch { }
+                }
+            }
+            ImGui.PopItemWidth();
+
+            // 右側に操作: 追加/現在キャラへ切替/削除
+            ImGui.SameLine();
+            if (ImGui.SmallButton("現在を選択/追加"))
+            {
+                try
+                {
+                    ulong? before = Config.ActiveContentId;
+                    ulong uiSel = 0; try { if (display.Count > 0) uiSel = display[Math.Clamp(curIndex, 0, display.Count - 1)].ContentId; } catch { }
+                    ulong clientId = 0; try { clientId = _client?.LocalContentId ?? 0; } catch { }
+                    Services.XsrDebug.Log(Config, $"UI: EnsureActiveProfile clicked: before=0x{before?.ToString("X") ?? "null"}, uiSel=0x{uiSel:X}, client=0x{clientId:X}");
+                    EnsureActiveProfileFromClient();
+                    ulong? after = Config.ActiveContentId;
+                    var ap = GetActiveProfile();
+                    Services.XsrDebug.Log(Config, $"UI: EnsureActiveProfile result: after=0x{after?.ToString("X") ?? "null"}, profiles={(Config.Profiles?.Count ?? 0)}, activeHasSnapshot={(ap?.LastSnapshot?.Items?.Count ?? 0)}");
+                    // 表示を現在のアクティブプロファイルに同期
+                    if (ap?.LastSnapshot?.Items != null && ap.LastSnapshot.Items.Count > 0)
+                    {
+                        _uiSnapshot = ap.LastSnapshot; _uiLastReadUtc = DateTime.UtcNow; _uiStatus = "現在キャラに切替";
+                    }
+                    else
+                    {
+                        _uiSnapshot = null; _uiLastReadUtc = DateTime.MinValue; _uiStatus = "現在キャラ: 保存データなし";
+                    }
+                }
+                catch { }
+            }
+            ImGui.SameLine();
+            if (ImGui.SmallButton("削除") && display.Count > 0)
+            {
+                try
+                {
+                    var sel = display[Math.Clamp(curIndex, 0, display.Count - 1)];
+                    list.Remove(sel);
+                    Config.Profiles = list;
+                    if (Config.ActiveContentId == sel.ContentId)
+                        Config.ActiveContentId = (list.Count > 0) ? list[0].ContentId : (ulong?)null;
+                    SaveConfig();
+                }
+                catch { }
+            }
+            if (list.Count >= 10) { ImGui.SameLine(); ImGui.TextDisabled("(上限10)"); }
+        }
+        catch { }
+    }
     public void Ui_LearnNames() { try { CmdLearnNames(); _uiStatus = "Learn triggered"; } catch (Exception ex) { _uiStatus = $"Learn failed: {ex.Message}"; } }
     // UIからの取得は無効化: 常にメモリ経由で手動取得
     public void Ui_DumpUi() { try { CmdDumpFromMemory(); _uiStatus = "Capture(Memory) triggered"; } catch (Exception ex) { _uiStatus = $"Capture(Memory) failed: {ex.Message}"; } }
     public void Ui_DumpMemory() { try { CmdDumpFromMemory(); _uiStatus = "Capture(Memory) triggered"; } catch (Exception ex) { _uiStatus = $"Capture(Memory) failed: {ex.Message}"; } }
     public void Ui_Probe() { try { _probeText = ProbeToText(); _uiStatus = "Probe done"; } catch (Exception ex) { _uiStatus = $"Probe failed: {ex.Message}"; } }
+
+    public void Ui_LogProfileState()
+    {
+        try
+        {
+            ulong? active = Config.ActiveContentId;
+            var list = Config.Profiles ?? new System.Collections.Generic.List<CharacterProfile>();
+            Services.XsrDebug.Log(Config, $"StateDump: active=0x{active?.ToString("X") ?? "null"}, profiles={list.Count}");
+            foreach (var p in list)
+            {
+                int items = 0; try { items = p.LastSnapshot?.Items?.Count ?? 0; } catch { }
+                Services.XsrDebug.Log(Config, $"  profile cid=0x{p.ContentId:X}, name='{p.CharacterName}', world='{p.WorldName}', items={items}");
+            }
+            int uiItems = 0; try { uiItems = _uiSnapshot?.Items?.Count ?? 0; } catch { }
+            Services.XsrDebug.Log(Config, $"  uiSnapshot items={uiItems}");
+        }
+        catch { }
+    }
+
+    // ルート別名（レター）編集UI（ActiveProfile優先）。空文字にすると削除。
+    public void Ui_DrawRouteAliasEditor()
+    {
+        try
+        {
+            var map = GetRouteNameMap();
+            if (map == null) { ImGui.TextDisabled("(別名マップなし)"); return; }
+
+            ImGui.TextUnformatted("別名(レター) 追加/更新");
+            ImGui.SameLine(180);
+            ImGui.PushItemWidth(80);
+            int id = Math.Clamp(_routeEditId, 0, 255);
+            if (ImGui.InputInt("Point ID", ref id)) { _routeEditId = id; }
+            ImGui.PopItemWidth();
+            ImGui.SameLine();
+            ImGui.PushItemWidth(160);
+            string alias = _routeEditName ?? string.Empty;
+            if (ImGui.InputText("Alias", ref alias, 32)) { _routeEditName = alias; }
+            ImGui.PopItemWidth();
+            ImGui.SameLine();
+            if (ImGui.SmallButton("追加/更新"))
+            {
+                try
+                {
+                    int pid = _routeEditId;
+                    var txt = (_routeEditName ?? string.Empty).Trim();
+                    if (pid >= 1 && pid <= 255 && !string.IsNullOrWhiteSpace(txt))
+                    {
+                        map[(byte)pid] = txt;
+                        SaveConfig();
+                        _uiStatus = $"Alias P{pid} = '{txt}'";
+                        _routeEditId = 0; _routeEditName = string.Empty;
+                    }
+                    else
+                    {
+                        _uiStatus = "ID(1-255)とAliasを入力してください";
+                    }
+                }
+                catch (Exception ex) { _uiStatus = $"Alias更新失敗: {ex.Message}"; }
+            }
+
+            // 一覧（編集/削除）
+            if (map.Count > 0)
+            {
+                ImGui.Separator();
+                ImGui.TextUnformatted("登録済み（空にすると削除）");
+                var keys = map.Keys.ToList();
+                keys.Sort((a, b) => a.CompareTo(b));
+                foreach (var k in keys)
+                {
+                    try
+                    {
+                        ImGui.TextUnformatted($"P{k}");
+                        ImGui.SameLine(180);
+                        ImGui.PushItemWidth(200);
+                        string v = map.TryGetValue(k, out var vv) ? (vv ?? string.Empty) : string.Empty;
+                        if (ImGui.InputText($"##alias_{k}", ref v, 32))
+                        {
+                            v = (v ?? string.Empty).Trim();
+                            if (string.IsNullOrEmpty(v)) map.Remove(k);
+                            else map[k] = v;
+                            SaveConfig();
+                        }
+                        ImGui.PopItemWidth();
+                        ImGui.SameLine();
+                        if (ImGui.SmallButton($"削除##{k}")) { map.Remove(k); SaveConfig(); }
+                    }
+                    catch { }
+                }
+            }
+            else
+            {
+                ImGui.TextDisabled("（未登録）");
+            }
+        }
+        catch { }
+    }
 
     // Day2: Alarm/Notion/Discord テスト系の補助
     public void Ui_TestGameAlarm()
@@ -143,8 +345,10 @@ public sealed partial class Plugin
         catch (Exception ex) { _uiStatus = $"Notion test failed: {ex.Message}"; }
     }
     private bool _revealNotionToken;
+    #if XSR_FEAT_GCAL
     private bool _revealGcalRefresh;
     private bool _revealGcalSecret;
+    #endif
 
     private void InitUI()
     {
@@ -183,7 +387,7 @@ public sealed partial class Plugin
                 // 概要
                 if (ImGui.BeginTabItem("概要"))
                 {
-                    try { XIVSubmarinesReturn.UI.OverviewTab.Draw(this); } catch { }
+            try { XIVSubmarinesReturn.UI.OverviewTab.Draw(this); } catch { }
                     ImGui.Separator(); if (!_showLegacyUi) goto __OV_END;
                     ImGui.Separator(); ImGui.TextDisabled("(旧UI)");
                     // 概要: 最小構成（自動取得 + Addon名）
@@ -582,15 +786,25 @@ public sealed partial class Plugin
                         ImGui.Text("スロット別名 (1..4)");
                         for (int i = 0; i < 4; i++)
                         {
-                            var val = Config.SlotAliases != null && i < Config.SlotAliases.Length ? (Config.SlotAliases[i] ?? string.Empty) : string.Empty;
+                            var aliases = GetSlotAliases();
+                            var val = aliases != null && i < aliases.Length ? (aliases[i] ?? string.Empty) : string.Empty;
                             var tmp = val;
                             ImGui.PushID(i);
                             if (ImGui.InputText("##alias", ref tmp, 64))
                             {
-                                if (Config.SlotAliases == null || Config.SlotAliases.Length < 4)
-                                    Config.SlotAliases = new string[4];
-                                Config.SlotAliases[i] = tmp;
-                                SaveConfig();
+                                try
+                                {
+                                    var prof = GetActiveProfile();
+                                    if (prof != null)
+                                    {
+                                        if (prof.SlotAliases == null || prof.SlotAliases.Length < 4) prof.SlotAliases = new string[4];
+                                        prof.SlotAliases[i] = tmp;
+                                    }
+                                    if (Config.SlotAliases == null || Config.SlotAliases.Length < 4) Config.SlotAliases = new string[4];
+                                    Config.SlotAliases[i] = tmp;
+                                    SaveConfig();
+                                }
+                                catch { }
                             }
                             ImGui.SameLine();
                             ImGui.Text($"Slot {i + 1}");
@@ -608,21 +822,30 @@ public sealed partial class Plugin
                             {
                                 if (_routeEditId >= 0 && _routeEditId <= 255)
                                 {
-                                    Config.RouteNames[(byte)_routeEditId] = _routeEditName ?? string.Empty;
+                                    var map = GetRouteNameMap();
+                                    if (map != null)
+                                    {
+                                        map[(byte)_routeEditId] = _routeEditName ?? string.Empty;
+                                        // 互換: グローバルにも反映
+                                        if (Config.RouteNames == null) Config.RouteNames = new System.Collections.Generic.Dictionary<byte, string>();
+                                        Config.RouteNames[(byte)_routeEditId] = _routeEditName ?? string.Empty;
+                                    }
                                     SaveConfig();
                                     _uiStatus = "Route name saved";
                                 }
                             }
                             catch (Exception ex) { _uiStatus = $"Route save failed: {ex.Message}"; }
                         }
-                        if (Config.RouteNames != null && Config.RouteNames.Count > 0)
+                        {
+                            var map = GetRouteNameMap();
+                            if (map != null && map.Count > 0)
                         {
                             if (ImGui.BeginTable("routes", 2, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg))
                             {
                                 ImGui.TableSetupColumn("ID");
                                 ImGui.TableSetupColumn("名前");
                                 ImGui.TableHeadersRow();
-                                foreach (var kv in Config.RouteNames.OrderBy(k => k.Key))
+                                foreach (var kv in map.OrderBy(k => k.Key))
                                 {
                                     ImGui.TableNextRow();
                                     ImGui.TableSetColumnIndex(0); ImGui.Text(kv.Key.ToString());
@@ -630,6 +853,7 @@ public sealed partial class Plugin
                                 }
                                 ImGui.EndTable();
                             }
+                        }
                         }
 
                         // スナップショットからレター表記を学習
@@ -673,13 +897,18 @@ public sealed partial class Plugin
                                     }
                                     else
                                     {
-                                        if (Config.RouteNames == null) Config.RouteNames = new System.Collections.Generic.Dictionary<byte,string>();
+                                        var map = GetRouteNameMap();
                                         for (int i = 0; i < nums.Count; i++)
                                         {
                                             var id = nums[i];
                                             var nm = letters[i];
                                             if (id >= 0 && id <= 255 && !string.IsNullOrWhiteSpace(nm))
+                                            {
+                                                map[(byte)id] = nm;
+                                                // 互換: グローバルにも反映
+                                                Config.RouteNames ??= new System.Collections.Generic.Dictionary<byte, string>();
                                                 Config.RouteNames[(byte)id] = nm;
+                                            }
                                         }
                                         SaveConfig();
                                         _uiStatus = "レター対応を保存しました";
@@ -909,13 +1138,26 @@ public sealed partial class Plugin
         catch { try { ImGui.End(); } catch { } }
     }
 
+    // 表示中プロファイルが「現在ログイン中のキャラ」と一致する場合のみ、bridge JSON の自動再読込を許可
+    private bool ShouldReloadFromBridge()
+    {
+        try
+        {
+            if (_client == null || !_client.IsLoggedIn) return false;
+            var active = Config.ActiveContentId;
+            if (!active.HasValue) return true; // 未選択なら最新JSONを表示
+            return _client.LocalContentId == active.Value;
+        }
+        catch { return false; }
+    }
+
     private void DrawSnapshotTable()
     {
         try
         {
             // Reload snapshot if file changed or last read too old (5s)
             var path = BridgeWriter.CurrentFilePath();
-            if (!string.IsNullOrEmpty(path) && File.Exists(path))
+            if (ShouldReloadFromBridge() && !string.IsNullOrEmpty(path) && File.Exists(path))
             {
                 var lastWrite = File.GetLastWriteTimeUtc(path);
                 if (_uiSnapshot == null || lastWrite > _uiLastReadUtc || (DateTime.UtcNow - _uiLastReadUtc) > TimeSpan.FromSeconds(5))
@@ -933,6 +1175,22 @@ public sealed partial class Plugin
                         _uiStatus = $"Read json failed: {ex.Message}";
                     }
                 }
+            }
+
+            // Fallback: アクティブプロファイルの保存スナップショット
+            if (_uiSnapshot == null || _uiSnapshot.Items == null || _uiSnapshot.Items.Count == 0)
+            {
+                try
+                {
+                    var p = GetActiveProfile();
+                    if (p?.LastSnapshot?.Items != null && p.LastSnapshot.Items.Count > 0)
+                    {
+                        _uiSnapshot = p.LastSnapshot;
+                        _uiLastReadUtc = DateTime.UtcNow;
+                        if (string.IsNullOrEmpty(_uiStatus)) _uiStatus = "プロファイル保存データを表示中";
+                    }
+                }
+                catch { }
             }
 
             if (_uiSnapshot?.Items == null || _uiSnapshot.Items.Count == 0)
@@ -1035,7 +1293,7 @@ public sealed partial class Plugin
         {
             // Reload snapshot if file changed or last read too old (5s)
             var path = BridgeWriter.CurrentFilePath();
-            if (!string.IsNullOrEmpty(path) && File.Exists(path))
+            if (ShouldReloadFromBridge() && !string.IsNullOrEmpty(path) && File.Exists(path))
             {
                 var lastWrite = File.GetLastWriteTimeUtc(path);
                 if (_uiSnapshot == null || lastWrite > _uiLastReadUtc || (DateTime.UtcNow - _uiLastReadUtc) > TimeSpan.FromSeconds(5))
@@ -1052,6 +1310,22 @@ public sealed partial class Plugin
                         _uiStatus = $"Read json failed: {ex.Message}";
                     }
                 }
+            }
+
+            // Fallback: アクティブプロファイルの保存スナップショット
+            if (_uiSnapshot == null || _uiSnapshot.Items == null || _uiSnapshot.Items.Count == 0)
+            {
+                try
+                {
+                    var p = GetActiveProfile();
+                    if (p?.LastSnapshot?.Items != null && p.LastSnapshot.Items.Count > 0)
+                    {
+                        _uiSnapshot = p.LastSnapshot;
+                        _uiLastReadUtc = DateTime.UtcNow;
+                        if (string.IsNullOrEmpty(_uiStatus)) _uiStatus = "プロファイル保存データを表示中";
+                    }
+                }
+                catch { }
             }
 
             ImGui.Text($"スナップショット: {( _uiSnapshot?.Items?.Count ?? 0)} 件");
@@ -1105,11 +1379,12 @@ public sealed partial class Plugin
                     // Resolver優先→学習（RouteNames）→P番号
                     var parts = new System.Collections.Generic.List<string>(nums.Count);
                     var hint = Config.SectorMapHint;
+                    var rmap = GetRouteNameMap();
                     foreach (var n in nums)
                     {
                         string? letter = null;
                         try { letter = _sectorResolver?.GetAliasForSector((uint)n, hint); } catch { }
-                        if (string.IsNullOrWhiteSpace(letter) && Config.RouteNames != null && Config.RouteNames.TryGetValue((byte)n, out var nm) && !string.IsNullOrWhiteSpace(nm))
+                        if (string.IsNullOrWhiteSpace(letter) && rmap != null && rmap.TryGetValue((byte)n, out var nm) && !string.IsNullOrWhiteSpace(nm))
                             letter = nm;
                         parts.Add(string.IsNullOrWhiteSpace(letter) ? $"P{n}" : letter!);
                     }
@@ -1219,13 +1494,3 @@ public sealed partial class Plugin
         return string.Join(Environment.NewLine, lines);
     }
 }
-
-
-
-
-
-
-
-
-
-

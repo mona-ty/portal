@@ -11,8 +11,10 @@ namespace XIVSubmarinesReturn.UI
     {
         private static bool _revealDiscord;
         private static bool _revealNotion;
+        #if XSR_FEAT_GCAL
         private static bool _revealGcalRefresh;
         private static bool _revealGcalSecret;
+        #endif
 
         internal static void Draw(Plugin p)
         {

@@ -13,6 +13,22 @@ namespace XIVSubmarinesReturn.UI
             using var _ = Theme.UseDensity(p.Config.UiRowDensity);
             try { ImGui.SetWindowFontScale(Math.Clamp(p.Config.UiFontScale, 0.9f, 1.3f)); } catch { }
 
+            // プロファイル情報
+            using (Widgets.Card("dbg_profile", new Vector2(0, 0)))
+            {
+                Widgets.SectionHeader("プロファイル情報");
+                try
+                {
+                    var activeId = p.Config.ActiveContentId;
+                    var profs = p.Config.Profiles ?? new System.Collections.Generic.List<CharacterProfile>();
+                    var cnt = profs.Count;
+                    ImGui.Text($"Profiles: {cnt}");
+                    ImGui.SameLine();
+                    ImGui.TextDisabled(activeId.HasValue ? $"Active: 0x{activeId.Value:X}" : "Active: (none)");
+                }
+                catch { }
+            }
+
             // 設定（縦並び）
             using (Widgets.Card("dbg_settings", new Vector2(0, 0)))
             {
@@ -40,6 +56,9 @@ namespace XIVSubmarinesReturn.UI
 
                 if (ImGui.Button("フォルダを開く")) { p.Ui_OpenBridgeFolder(); }
                 ImGui.SameLine(); ImGui.TextDisabled("Bridgeフォルダを開く");
+
+                if (ImGui.Button("プロファイル状態をログ出力")) { p.Ui_LogProfileState(); }
+                ImGui.SameLine(); ImGui.TextDisabled("Active/Profiles/UIの状態を xsr_debug.log に吐きます");
             }
 
             // プローブ結果（省スペース）
