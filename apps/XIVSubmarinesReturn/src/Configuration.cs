@@ -23,6 +23,16 @@ public class Configuration : IPluginConfiguration
 {
     public int Version { get; set; } = 1;
 
+    // 設定スキーマの内部バージョン（プロファイル導入用）
+    public int ConfigVersion { get; set; } = 1;
+
+    // 複数キャラ対応：プロファイルとアクティブID
+    public System.Collections.Generic.List<CharacterProfile> Profiles { get; set; } = new();
+    public ulong? ActiveContentId { get; set; }
+
+    // ログイン検出時に自動でプロファイルを作成するか（既定: false）
+    public bool AutoCreateProfileOnLogin { get; set; } = false;
+
     public bool AutoCaptureOnWorkshopOpen { get; set; } = false;
 
     // 設定ウィンドウの自動リサイズ（縦横）。既定で有効。
@@ -121,4 +131,3 @@ public class Configuration : IPluginConfiguration
         pi.SavePluginConfig(this);
     }
 }
-

@@ -45,3 +45,9 @@ Settings UI
 メモ
 - `dumpraw` はヘッダに加え、SelectString の各項目（Submarine-1〜4）も出力対象になりました。
 - `dumptree` は末尾に `-- SelectString items --` として抽出済みの一覧を併記します。
+
+補足（ビルド設定の汎用化）
+- `Local.props` が無い場合でも、csproj が以下の順で `DalamudLibPath` を解決します。
+  - 環境変数 `DALAMUD_LIB_PATH`
+  - `$(APPDATA)\XIVLauncher\addon\Hooks\dev`
+- 他PCでもそのままビルド可能です。必要に応じて `Local.props` に `$(APPDATA)` ベースで上書き設定してください。

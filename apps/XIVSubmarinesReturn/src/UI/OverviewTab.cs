@@ -12,6 +12,13 @@ namespace XIVSubmarinesReturn.UI
             using var _ = Theme.UseDensity(p.Config.UiRowDensity);
             try { ImGui.SetWindowFontScale(Math.Clamp(p.Config.UiFontScale, 0.9f, 1.3f)); } catch { }
 
+            // プロファイル
+            using (Widgets.Card("ov_profile", new Vector2(0, 0)))
+            {
+                Widgets.SectionHeader("プロファイル");
+                p.Ui_DrawProfileSelector();
+            }
+
             // 操作
             using (Widgets.Card("ov_ops", new Vector2(0, 0)))
             {
@@ -42,6 +49,10 @@ namespace XIVSubmarinesReturn.UI
                 if (ImGui.InputText("Mapヒント", ref mapHint, 64)) { p.Config.SectorMapHint = mapHint; p.SaveConfig(); }
                 ImGui.SameLine();
                 if (Widgets.IconButton(Dalamud.Interface.FontAwesomeIcon.RedoAlt, "Alias JSON再読込")) { p.Ui_ReloadAliasIndex(); }
+
+                ImGui.Separator();
+                ImGui.TextDisabled("ルート別名（レター）編集");
+                try { p.Ui_DrawRouteAliasEditor(); } catch { }
             }
 
             // 航路情報

@@ -1,6 +1,13 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project Sdk="Microsoft.NET.Sdk">
   <Import Project="Local.props" Condition="Exists('Local.props')" />
+  <!-- Portable defaults when Local.props is absent -->
+  <PropertyGroup>
+    <!-- If provided, prefer explicit env var DALAMUD_LIB_PATH -->
+    <DalamudLibPath Condition="'$(DalamudLibPath)' == '' and '$(DALAMUD_LIB_PATH)' != ''">$(DALAMUD_LIB_PATH)</DalamudLibPath>
+    <!-- Fallback to standard XIVLauncher dev hooks under APPDATA -->
+    <DalamudLibPath Condition="'$(DalamudLibPath)' == '' and '$(APPDATA)' != ''">$(APPDATA)\XIVLauncher\addon\Hooks\dev</DalamudLibPath>
+  </PropertyGroup>
   <PropertyGroup>
     <TargetFramework>net9.0-windows</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -38,6 +45,14 @@
       <HintPath>$(DalamudLibPath)\InteropGenerator.Runtime.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <Reference Include="Lumina">
+      <HintPath>$(DalamudLibPath)\Lumina.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Lumina.Excel">
+      <HintPath>$(DalamudLibPath)\Lumina.Excel.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
     <!-- ImGui.NET.dll は環境により同梱されないため、直接参照を外す（Bindings 側を利用） -->
     <Reference Include="ImGuiScene">
       <HintPath>$(DalamudLibPath)\ImGuiScene.dll</HintPath>
@@ -61,6 +76,7 @@
     <!-- 互換目的: plugin.json も同様に固定名で埋め込み（実際の読み取りは manifest.json が使用される） -->
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="src\CharacterProfile.cs" />
     <Compile Include="src\Plugin.cs" />
     <Compile Include="src\Configuration.cs" />
     <Compile Include="src\BridgeWriter.cs" />

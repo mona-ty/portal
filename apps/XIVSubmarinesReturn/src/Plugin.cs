@@ -29,6 +29,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private readonly IGameGui _gameGui;
     private readonly IPluginLog _log;
     private readonly IToastGui _toast;
+    private readonly IClientState? _client;
 
     public Configuration Config { get; private set; }
 
@@ -58,6 +59,7 @@ public sealed partial class Plugin : IDalamudPlugin
         IGameGui gameGui,
         IPluginLog log,
         Dalamud.Plugin.Services.IDataManager data,
+        IClientState client,
         IToastGui toast)
     {
         _pi = pluginInterface;
@@ -67,6 +69,7 @@ public sealed partial class Plugin : IDalamudPlugin
         _gameGui = gameGui;
         _log = log;
         _toast = toast;
+        _client = client;
 
         Config = _pi.GetPluginConfig() as Configuration ?? new Configuration();
 
@@ -97,6 +100,12 @@ public sealed partial class Plugin : IDalamudPlugin
 
         _framework.Update += OnFrameworkUpdate;
         InitUI();
+
+        // 設定移行（V1 -> V2: プロファイル導入）
+        try { MigrateToProfilesV2IfNeeded(); } catch { }
+
+        // ログイン中での自動作成はオプション
+        try { if (Config.AutoCreateProfileOnLogin) EnsureActiveProfileFromClient(); } catch { }
 
         try
         {
@@ -139,6 +148,18 @@ public sealed partial class Plugin : IDalamudPlugin
         catch { }
     }
 
+    private void TryPersistActiveProfileSnapshot(SubmarineSnapshot snap)
+    {
+        try
+        {
+            var p = GetActiveProfile();
+            if (p == null) return;
+            p.LastSnapshot = snap;
+            SaveConfig();
+        }
+        catch { }
+    }
+
     public void Dispose()
     {
         _framework.Update -= OnFrameworkUpdate;
@@ -149,6 +170,126 @@ public sealed partial class Plugin : IDalamudPlugin
         _cmd.RemoveHandler(CmdSetAddon);
         _cmd.RemoveHandler(CmdRoot);
         _cmd.RemoveHandler(CmdShort);
+    }
+
+    // ===== プロファイル補助 =====
+    private CharacterProfile? GetActiveProfile()
+    {
+        try
+        {
+            var list = Config.Profiles ?? new System.Collections.Generic.List<CharacterProfile>();
+            if (list.Count == 0) return null;
+            if (Config.ActiveContentId.HasValue)
+            {
+                var p = list.FirstOrDefault(x => x.ContentId == Config.ActiveContentId.Value);
+                if (p != null) return p;
+            }
+            return list[0];
+        }
+        catch { return null; }
+    }
+
+    private void EnsureActiveProfileFromClient()
+    {
+        try
+        {
+            if (_client == null) return;
+            if (!_client.IsLoggedIn) return;
+            ulong id = _client.LocalContentId;
+            if (id == 0) return;
+
+            var list = Config.Profiles ?? new System.Collections.Generic.List<CharacterProfile>();
+            var prof = list.FirstOrDefault(x => x.ContentId == id);
+            if (prof == null)
+            {
+                prof = new CharacterProfile { ContentId = id };
+                // 旧プレースホルダ（CID=0）があれば統合してから差し替え
+                try
+                {
+                    var ph = list.FirstOrDefault(x => x.ContentId == 0);
+                    if (ph != null)
+                    {
+                        try { if (prof.SlotAliases == null || prof.SlotAliases.Length == 0) prof.SlotAliases = ph.SlotAliases ?? new string[4]; } catch { }
+                        try { if (prof.LastRouteBySlot == null || prof.LastRouteBySlot.Count == 0) prof.LastRouteBySlot = ph.LastRouteBySlot ?? new System.Collections.Generic.Dictionary<int, string>(); } catch { }
+                        try { if (prof.RouteNames == null || prof.RouteNames.Count == 0) prof.RouteNames = ph.RouteNames ?? new System.Collections.Generic.Dictionary<byte, string>(); } catch { }
+                        try { list.Remove(ph); } catch { }
+                    }
+                }
+                catch { }
+                list.Add(prof);
+                Config.Profiles = list;
+            }
+
+            // メタ情報更新（取得できる範囲で）
+            try { prof.LastSeenUtc = DateTimeOffset.UtcNow; } catch { }
+            try
+            {
+                var lp = _client.LocalPlayer;
+                if (lp != null)
+                {
+                    try { prof.CharacterName = lp.Name?.TextValue ?? prof.CharacterName; } catch { }
+                    // HomeWorld の名称取得は Lumina の型に依存しており環境差があるため安全にスキップ
+                    // 必要なら後続の別経路で補完する
+                }
+            }
+            catch { }
+
+            if (Config.ActiveContentId != id) { Config.ActiveContentId = id; }
+            SaveConfig();
+        }
+        catch { }
+    }
+
+    private void MigrateToProfilesV2IfNeeded()
+    {
+        try
+        {
+            if (Config.ConfigVersion >= 2) return;
+            var hasAny = false;
+            try
+            {
+                if (Config.SlotAliases != null && Config.SlotAliases.Any(s => !string.IsNullOrWhiteSpace(s))) hasAny = true;
+                if (!hasAny && Config.LastRouteBySlot != null && Config.LastRouteBySlot.Count > 0) hasAny = true;
+                if (!hasAny && Config.RouteNames != null && Config.RouteNames.Count > 0) hasAny = true;
+            }
+            catch { }
+
+            // 旧データを初回のみ1件のプロファイルに包む（元のフィールドは互換のため残す）
+            if ((Config.Profiles?.Count ?? 0) == 0 && hasAny)
+            {
+                var p = new CharacterProfile
+                {
+                    ContentId = 0,
+                    CharacterName = string.Empty,
+                    WorldName = string.Empty,
+                    FreeCompanyName = string.Empty,
+                    LastSeenUtc = DateTimeOffset.UtcNow,
+                    SlotAliases = Config.SlotAliases ?? new string[4],
+                    LastRouteBySlot = Config.LastRouteBySlot ?? new System.Collections.Generic.Dictionary<int, string>(),
+                    RouteNames = Config.RouteNames ?? new System.Collections.Generic.Dictionary<byte, string>(),
+                };
+                Config.Profiles = new System.Collections.Generic.List<CharacterProfile> { p };
+                if (!Config.ActiveContentId.HasValue) Config.ActiveContentId = p.ContentId;
+            }
+            Config.ConfigVersion = 2;
+            SaveConfig();
+        }
+        catch { }
+    }
+
+    private string[] GetSlotAliases()
+    {
+        try { return GetActiveProfile()?.SlotAliases ?? (Config.SlotAliases ?? new string[4]); } catch { return Config.SlotAliases ?? new string[4]; }
+    }
+
+    private System.Collections.Generic.Dictionary<int, string> GetLastRouteMap()
+    {
+        try { return GetActiveProfile()?.LastRouteBySlot ?? (Config.LastRouteBySlot ?? new System.Collections.Generic.Dictionary<int, string>()); } catch { return Config.LastRouteBySlot ?? new System.Collections.Generic.Dictionary<int, string>(); }
+    }
+
+    private System.Collections.Generic.Dictionary<byte, string> GetRouteNameMap()
+    {
+        try { return GetActiveProfile()?.RouteNames ?? (Config.RouteNames ?? new System.Collections.Generic.Dictionary<byte, string>()); } catch { return Config.RouteNames ?? new System.Collections.Generic.Dictionary<byte, string>(); }
     }
 
     private void OnCmdDump(string cmd, string args)
@@ -170,6 +311,7 @@ public sealed partial class Plugin : IDalamudPlugin
             try { TryAdoptPreviousRoutes(snap); } catch { }
             try { _alarm?.UpdateSnapshot(snap); } catch { }
             BridgeWriter.WriteIfChanged(snap);
+            try { TryPersistActiveProfileSnapshot(snap); } catch { }
             _chat.Print( $"[Submarines] JSONを書き出しました: {BridgeWriter.CurrentFilePath()}"); 
         }
         catch (Exception ex)
@@ -241,6 +383,7 @@ public sealed partial class Plugin : IDalamudPlugin
             try { TryAdoptFromLogs(snap); } catch { }
             try { _alarm?.UpdateSnapshot(snap); } catch { }
             BridgeWriter.WriteIfChanged(snap);
+            try { TryPersistActiveProfileSnapshot(snap); } catch { }
             _chat.Print( $"[Submarines] JSONを書き出しました: {BridgeWriter.CurrentFilePath()}"); 
         }
         catch (Exception ex)
@@ -306,11 +449,15 @@ public sealed partial class Plugin : IDalamudPlugin
             }
 
             // 先頭4件を保存（スロット1..4）
+            var aliases = GetSlotAliases();
             for (int i = 0; i < Math.Min(4, learned.Count); i++)
-                Config.SlotAliases[i] = learned[i];
+            {
+                try { aliases[i] = learned[i]; } catch { }
+                try { if (Config.SlotAliases != null) Config.SlotAliases[i] = learned[i]; } catch { }
+            }
 
             SaveConfig();
-            var names = string.Join(", ", (Config.SlotAliases ?? Array.Empty<string>()).Where(s => !string.IsNullOrWhiteSpace(s)));
+            var names = string.Join(", ", (aliases ?? Array.Empty<string>()).Where(s => !string.IsNullOrWhiteSpace(s)));
             _chat.Print($"[Submarines] 名前を学習しました: {names}");
         }
         catch (Exception ex)
@@ -365,7 +512,7 @@ public sealed partial class Plugin : IDalamudPlugin
                 // 学習済みの実艦名があれば置き換え（スロット1..4 -> 配列0..3）
                 try
                 {
-                    var aliases = Config.SlotAliases;
+                    var aliases = GetSlotAliases();
                     if (aliases != null && i >= 0 && i < aliases.Length)
                     {
                         var alias = aliases[i];
@@ -520,7 +667,7 @@ public sealed partial class Plugin : IDalamudPlugin
 
                 try
                 {
-                    var aliases = Config.SlotAliases;
+                    var aliases = GetSlotAliases();
                     if (aliases != null && i >= 0 && i < aliases.Length)
                     {
                         var alias = aliases[i];
@@ -575,12 +722,13 @@ public sealed partial class Plugin : IDalamudPlugin
                         if (pts.Count >= 3)
                         {
                             rec.RouteKey = routeFromMem;
-                            try { Config.LastRouteBySlot[slot] = rec.RouteKey; SaveConfig(); } catch { }
+                            try { SaveCache(slot, ParseRouteNumbers(routeFromMem)); } catch { }
                         }
                         else if (pts.Count > 0)
                         {
                             rec.RouteKey = routeFromMem;
-                            if (Config.LastRouteBySlot != null && Config.LastRouteBySlot.TryGetValue(slot, out var prev) && !string.IsNullOrWhiteSpace(prev))
+                            var map = GetLastRouteMap();
+                            if (map != null && map.TryGetValue(slot, out var prev) && !string.IsNullOrWhiteSpace(prev))
                             {
                                 var prevNums = ParseRouteNumbers(prev);
                                 var curNums = pts.ConvertAll(b => (int)b);
@@ -590,7 +738,8 @@ public sealed partial class Plugin : IDalamudPlugin
                         }
                         else
                         {
-                            if (Config.LastRouteBySlot != null && Config.LastRouteBySlot.TryGetValue(slot, out var prev) && !string.IsNullOrWhiteSpace(prev))
+                            var map2 = GetLastRouteMap();
+                            if (map2 != null && map2.TryGetValue(slot, out var prev) && !string.IsNullOrWhiteSpace(prev))
                                 rec.RouteKey = prev;
                         }
                     }
@@ -1060,7 +1209,8 @@ public sealed partial class Plugin : IDalamudPlugin
     {
         try
         {
-            if (Config.LastRouteBySlot != null && Config.LastRouteBySlot.TryGetValue(slot, out var s) && !string.IsNullOrWhiteSpace(s))
+            var map = GetLastRouteMap();
+            if (map != null && map.TryGetValue(slot, out var s) && !string.IsNullOrWhiteSpace(s))
                 return ParseRouteNumbers(s);
         }
         catch { }
@@ -1072,8 +1222,15 @@ public sealed partial class Plugin : IDalamudPlugin
         try
         {
             if (numbers == null || numbers.Count < 3) return; // フルのみ保存
+            var p = GetActiveProfile();
+            var key = BuildRouteKeyFromNumbers(numbers);
+            if (p != null)
+            {
+                if (p.LastRouteBySlot == null) p.LastRouteBySlot = new System.Collections.Generic.Dictionary<int, string>();
+                p.LastRouteBySlot[slot] = key;
+            }
             if (Config.LastRouteBySlot == null) Config.LastRouteBySlot = new System.Collections.Generic.Dictionary<int, string>();
-            Config.LastRouteBySlot[slot] = BuildRouteKeyFromNumbers(numbers);
+            Config.LastRouteBySlot[slot] = key;
             SaveConfig();
         }
         catch { }
@@ -1089,7 +1246,8 @@ public sealed partial class Plugin : IDalamudPlugin
             {
                 string? letter = null;
                 try { letter = _sectorResolver?.GetAliasForSector((uint)n, hint); } catch { }
-                if (string.IsNullOrWhiteSpace(letter) && Config.RouteNames != null && Config.RouteNames.TryGetValue((byte)n, out var nm) && !string.IsNullOrWhiteSpace(nm))
+                var rmap = GetRouteNameMap();
+                if (string.IsNullOrWhiteSpace(letter) && rmap != null && rmap.TryGetValue((byte)n, out var nm) && !string.IsNullOrWhiteSpace(nm))
                     letter = nm;
                 parts.Add(string.IsNullOrWhiteSpace(letter) ? $"P{n}" : letter!);
             }
@@ -1658,6 +1816,7 @@ public sealed partial class Plugin : IDalamudPlugin
                         try { TryAdoptPreviousRoutes(snap); } catch { }
                         try { _alarm?.UpdateSnapshot(snap); } catch { }
                         BridgeWriter.WriteIfChanged(snap);
+                        try { TryPersistActiveProfileSnapshot(snap); } catch { }
                         _chat.Print("[Submarines] 自動取得しJSONを書き出しました。");
                         _log.Info("Auto-captured and wrote JSON");
                         _notifiedThisVisibility = true; // 可視セッション中は一度だけ通知
@@ -1674,4 +1833,3 @@ public sealed partial class Plugin : IDalamudPlugin
         }
     }
 }
-
