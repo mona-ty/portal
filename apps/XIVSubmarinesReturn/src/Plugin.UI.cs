@@ -102,6 +102,7 @@ public sealed partial class Plugin
                 if (display.Count > 0)
                 {
                     var sel = display[Math.Clamp(curIndex, 0, display.Count - 1)];
+                    try { Services.XsrDebug.Log(Config, $"UI: ComboChanged -> cid=0x{sel.ContentId:X}, name='{sel.CharacterName}'"); } catch { }
                     Config.ActiveContentId = sel.ContentId;
                     SaveConfig();
                     try
@@ -124,7 +125,27 @@ public sealed partial class Plugin
             ImGui.SameLine();
             if (ImGui.SmallButton("現在を選択/追加"))
             {
-                try { EnsureActiveProfileFromClient(); } catch { }
+                try
+                {
+                    ulong? before = Config.ActiveContentId;
+                    ulong uiSel = 0; try { if (display.Count > 0) uiSel = display[Math.Clamp(curIndex, 0, display.Count - 1)].ContentId; } catch { }
+                    ulong clientId = 0; try { clientId = _client?.LocalContentId ?? 0; } catch { }
+                    Services.XsrDebug.Log(Config, $"UI: EnsureActiveProfile clicked: before=0x{before?.ToString("X") ?? "null"}, uiSel=0x{uiSel:X}, client=0x{clientId:X}");
+                    EnsureActiveProfileFromClient();
+                    ulong? after = Config.ActiveContentId;
+                    var ap = GetActiveProfile();
+                    Services.XsrDebug.Log(Config, $"UI: EnsureActiveProfile result: after=0x{after?.ToString("X") ?? "null"}, profiles={(Config.Profiles?.Count ?? 0)}, activeHasSnapshot={(ap?.LastSnapshot?.Items?.Count ?? 0)}");
+                    // 表示を現在のアクティブプロファイルに同期
+                    if (ap?.LastSnapshot?.Items != null && ap.LastSnapshot.Items.Count > 0)
+                    {
+                        _uiSnapshot = ap.LastSnapshot; _uiLastReadUtc = DateTime.UtcNow; _uiStatus = "現在キャラに切替";
+                    }
+                    else
+                    {
+                        _uiSnapshot = null; _uiLastReadUtc = DateTime.MinValue; _uiStatus = "現在キャラ: 保存データなし";
+                    }
+                }
+                catch { }
             }
             ImGui.SameLine();
             if (ImGui.SmallButton("削除") && display.Count > 0)

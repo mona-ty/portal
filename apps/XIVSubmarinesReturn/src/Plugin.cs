@@ -167,6 +167,7 @@ public sealed partial class Plugin : IDalamudPlugin
                         {
                             prof.LastSnapshot = snap;
                             SaveConfig();
+                            try { Services.XsrDebug.Log(Config, $"PersistSnapshot: to client cid=0x{id:X}, items={(snap?.Items?.Count ?? 0)}"); } catch { }
                             return;
                         }
                     }
@@ -179,6 +180,7 @@ public sealed partial class Plugin : IDalamudPlugin
             if (p == null) return;
             p.LastSnapshot = snap;
             SaveConfig();
+            try { Services.XsrDebug.Log(Config, $"PersistSnapshot: to active cid=0x{(Config.ActiveContentId?.ToString("X") ?? "null")}, items={(snap?.Items?.Count ?? 0)}"); } catch { }
         }
         catch { }
     }
@@ -263,6 +265,7 @@ public sealed partial class Plugin : IDalamudPlugin
             ulong id = _client.LocalContentId;
             if (id == 0) return;
 
+            try { Services.XsrDebug.Log(Config, $"EnsureActiveProfileFromClient: begin client=0x{id:X}, active=0x{Config.ActiveContentId?.ToString("X") ?? "null"}"); } catch { }
             var list = Config.Profiles ?? new System.Collections.Generic.List<CharacterProfile>();
             var prof = list.FirstOrDefault(x => x.ContentId == id);
             if (prof == null)
@@ -283,6 +286,7 @@ public sealed partial class Plugin : IDalamudPlugin
                 catch { }
                 list.Add(prof);
                 Config.Profiles = list;
+                try { Services.XsrDebug.Log(Config, $"EnsureActiveProfileFromClient: created profile for 0x{id:X}"); } catch { }
             }
 
             // メタ情報更新（取得できる範囲で）
@@ -301,6 +305,7 @@ public sealed partial class Plugin : IDalamudPlugin
 
             if (Config.ActiveContentId != id) { Config.ActiveContentId = id; }
             SaveConfig();
+            try { Services.XsrDebug.Log(Config, $"EnsureActiveProfileFromClient: end active=0x{Config.ActiveContentId?.ToString("X") ?? "null"}, profiles={(Config.Profiles?.Count ?? 0)}"); } catch { }
         }
         catch { }
     }
