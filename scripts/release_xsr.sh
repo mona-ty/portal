@@ -54,6 +54,24 @@ BACKUP_BRANCH="backup/initial-${DATE_STAMP}"
 echo "==> Checkout base branch: $BASE_BRANCH"
 git checkout -q "$BASE_BRANCH"
 
+echo "==> Bump csproj version to ${VERSION_TAG#v} in $APP_PREFIX"
+CSPROJ="$APP_PREFIX/XIVSubmarinesReturn.csproj"
+if [[ -f "$CSPROJ" ]]; then
+  NEWV_NO_V=${VERSION_TAG#v}
+  ASM_V="$NEWV_NO_V.0"
+  sed -i -E "s#<AssemblyVersion>[^<]+</AssemblyVersion>#<AssemblyVersion>${ASM_V}</AssemblyVersion>#" "$CSPROJ"
+  sed -i -E "s#<FileVersion>[^<]+</FileVersion>#<FileVersion>${ASM_V}</FileVersion>#" "$CSPROJ"
+  sed -i -E "s#<Version>[^<]+</Version>#<Version>${NEWV_NO_V}</Version>#" "$CSPROJ"
+  if ! git diff --quiet -- "$CSPROJ"; then
+    git add "$CSPROJ"
+    git commit -m "chore(xsr): bump csproj version to ${VERSION_TAG}" >/dev/null
+  else
+    echo "csproj already at ${NEWV_NO_V}; no commit"
+  fi
+else
+  echo "Warning: csproj not found at $CSPROJ; skipping bump" >&2
+fi
+
 echo "==> Split subtree: $APP_PREFIX from $BASE_BRANCH -> $EXPORT_BRANCH"
 git subtree split --prefix="$APP_PREFIX" "$BASE_BRANCH" -b "$EXPORT_BRANCH" >/dev/null
 
@@ -77,4 +95,3 @@ git push -f "$REMOTE_NAME" "$VERSION_TAG"
 echo "==> Done. Check Actions & Release:"
 echo "    https://github.com/$(git remote get-url $REMOTE_NAME | sed -E 's#.*github.com[:/ ]##;s/.git$//')/actions"
 echo "    https://github.com/$(git remote get-url $REMOTE_NAME | sed -E 's#.*github.com[:/ ]##;s/.git$//')/releases/tag/${VERSION_TAG}"
-

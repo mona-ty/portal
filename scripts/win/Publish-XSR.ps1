@@ -36,6 +36,26 @@ $exportBranch = "xsr/export-$stamp"
 $backupBranch = "backup/initial-$stamp"
 
 Exec "git checkout $BaseBranch"
+
+# Bump csproj version in monorepo before split
+$csproj = Join-Path $appPrefix 'XIVSubmarinesReturn.csproj'
+if (Test-Path $csproj) {
+  $vNoV = $Version.TrimStart('v')
+  $asmV = "$vNoV.0"
+  $xml = Get-Content $csproj -Raw
+  $xml = $xml -replace '<AssemblyVersion>[^<]+</AssemblyVersion>', "<AssemblyVersion>$asmV</AssemblyVersion>"
+  $xml = $xml -replace '<FileVersion>[^<]+</FileVersion>', "<FileVersion>$asmV</FileVersion>"
+  $xml = $xml -replace '<Version>[^<]+</Version>', "<Version>$vNoV</Version>"
+  Set-Content -Path $csproj -Value $xml -Encoding UTF8
+  if (-not (git diff --quiet -- $csproj)) {
+    Exec "git add $csproj"
+    Exec "git commit -m 'chore(xsr): bump csproj version to $Version'"
+  } else {
+    Write-Host "csproj already at $vNoV; no commit"
+  }
+} else {
+  Write-Warning "csproj not found at $csproj; skipping bump"
+}
 Exec "git subtree split --prefix=$appPrefix $BaseBranch -b $exportBranch"
 
 Exec "git fetch $remoteName --quiet"
@@ -56,4 +76,3 @@ $repoPath = (git remote get-url $remoteName) -replace '.*github.com[:/ ]','' -re
 Write-Host "Done. Check:" -ForegroundColor Green
 Write-Host " - https://github.com/$repoPath/actions"
 Write-Host " - https://github.com/$repoPath/releases/tag/$Version"
-
