@@ -7,9 +7,9 @@
   "ApplicableVersion": "any",
   "DalamudApiLevel": 13,
   "Tags": ["submarine", "workshop", "utilities"],
-  "RepoUrl": "",
+  "RepoUrl": "https://github.com/mona-ty/XIVSubmarinesReturn",
   "IconUrl": "icon.png",
   "ImageUrls": ["icon.png"],
   "Changelog": "Initial scaffold",
-  "AssemblyVersion": "0.1.1"
+  "AssemblyVersion": "1.0.0"
 }

@@ -4,13 +4,12 @@
   "InternalName": "XIVSubmarinesReturn",
   "Punchline": "Submarine list -> JSON bridge",
   "Description": "Captures company workshop submarine list and writes JSON for external tools.",
-  "RepoUrl": "",
+  "RepoUrl": "https://github.com/mona-ty/XIVSubmarinesReturn",
   "IconUrl": "icon.png",
   "ImageUrls": ["icon.png"],
   "AssemblyName": "XIVSubmarinesReturn.dll",
-  "AssemblyVersion": "0.1.1",
+  "AssemblyVersion": "1.0.0",
   "DalamudApiLevel": 13,
   "Tags": ["submarine", "workshop", "utility"]
 }
-
 

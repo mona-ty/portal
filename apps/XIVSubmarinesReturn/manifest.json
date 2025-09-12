@@ -7,9 +7,9 @@
   "ApplicableVersion": "any",
   "DalamudApiLevel": 13,
   "AssemblyName": "XIVSubmarinesReturn.dll",
-  "AssemblyVersion": "0.1.1",
+  "AssemblyVersion": "1.0.0",
   "Tags": ["submarine", "workshop", "utilities"],
-  "IconUrl": "icon.png"
-  ,
+  "IconUrl": "icon.png",
+  "RepoUrl": "https://github.com/mona-ty/XIVSubmarinesReturn",
   "ImageUrls": ["icon.png"]
 }
