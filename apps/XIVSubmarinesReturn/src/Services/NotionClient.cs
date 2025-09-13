@@ -25,6 +25,7 @@ namespace XIVSubmarinesReturn.Services
         private readonly HttpClient _http;
         private const string NotionVersion = "2022-06-28";
         private readonly Dalamud.Plugin.IDalamudPluginInterface? _pi;
+        private static readonly System.Threading.SemaphoreSlim _provLock = new(1, 1);
 
         public NotionClient(Configuration cfg, Dalamud.Plugin.Services.IPluginLog log, HttpClient http, Dalamud.Plugin.IDalamudPluginInterface? pi = null)
         {
@@ -67,7 +68,9 @@ namespace XIVSubmarinesReturn.Services
             {
                 if (!_cfg.NotionEnabled) return false;
                 if (string.IsNullOrWhiteSpace(_cfg.NotionToken)) return false;
-
+                await _provLock.WaitAsync(ct).ConfigureAwait(false);
+                try
+                {
                 // Check per-identity DB first
                 var key = GetIdentityKey(snap);
                 if (_cfg.NotionPerIdentityDatabase && !string.IsNullOrWhiteSpace(key))
@@ -121,6 +124,8 @@ namespace XIVSubmarinesReturn.Services
                 TrySaveConfig();
                 XsrDebug.Log(_cfg, $"Notion: database provisioned id={dbId}");
                 return true;
+                }
+                finally { try { _provLock.Release(); } catch { } }
             }
             catch (Exception ex)
             {
@@ -207,17 +212,7 @@ namespace XIVSubmarinesReturn.Services
                 if (!resp.IsSuccessStatusCode)
                 {
                     if ((int)resp.StatusCode == 404)
-                    {
-                        // Database might have been deleted; attempt re-provision once.
-                        XsrDebug.Log(_cfg, "Notion query 404: database missing; attempting re-provision");
-                        _cfg.NotionDatabaseId = string.Empty; TrySaveConfig();
-                        var ok = await EnsureProvisionedAsync(null, ct).ConfigureAwait(false);
-                        if (ok && !string.IsNullOrWhiteSpace(_cfg.NotionDatabaseId))
-                        {
-                            // retry once with new DB
-                            return await TryFindPageIdByExtIdAsync(_cfg.NotionDatabaseId!, extId, ct).ConfigureAwait(false);
-                        }
-                    }
+                        XsrDebug.Log(_cfg, $"Notion query 404 for db={databaseId}");
                     if (_cfg.DebugLogging)
                         _log.Warning($"Notion query failed: {(int)resp.StatusCode} {resp.ReasonPhrase} body={body}");
                     else
@@ -555,7 +550,8 @@ namespace XIVSubmarinesReturn.Services
 
         private void TrySaveConfig()
         {
-            try { _pi?.SavePluginConfig(_cfg); } catch { }
+            try { _pi?.SavePluginConfig(_cfg); XsrDebug.Log(_cfg, "Notion: config saved successfully"); }
+            catch (Exception ex) { try { _log.Error(ex, "Notion config save failed"); } catch { _log.Warning("Notion config save failed"); } XsrDebug.Log(_cfg, "Notion config save failed", ex); }
         }
 
         public static string? TryExtractIdFromUrlOrId(string? input)
