@@ -167,39 +167,44 @@ namespace XIVSubmarinesReturn.Services
                 }
                 catch { }
 
-                var pageId = await TryFindPageIdByExtIdAsync(databaseId, extId, ct).ConfigureAwait(false);
+                var tfRes = await TryFindPageIdByExtIdAsync(databaseId, extId, ct).ConfigureAwait(false);
+                var pageId = tfRes.pageId;
+                var dbNotFound = tfRes.dbNotFound;
                 if (!string.IsNullOrEmpty(pageId))
                 {
                     await UpdatePageAsync(pageId!, snap, it, extId, ct).ConfigureAwait(false);
                 }
                 else
                 {
-                    // Purge stale mapping that equals the queried databaseId to force re-provision
-                    try
+                    if (dbNotFound)
                     {
-                        if (_cfg.NotionPerIdentityDatabase && _cfg.NotionDatabaseByIdentity != null && _cfg.NotionDatabaseByIdentity.Count > 0)
+                        // Purge stale mapping only when DB itself is not found (404)
+                        try
                         {
-                            var staleKeys = _cfg.NotionDatabaseByIdentity.Where(kv => string.Equals(kv.Value, databaseId, StringComparison.Ordinal)).Select(kv => kv.Key).ToList();
-                            foreach (var k in staleKeys) _cfg.NotionDatabaseByIdentity.Remove(k);
-                            if (staleKeys.Count > 0) TrySaveConfig();
+                            if (_cfg.NotionPerIdentityDatabase && _cfg.NotionDatabaseByIdentity != null && _cfg.NotionDatabaseByIdentity.Count > 0)
+                            {
+                                var staleKeys = _cfg.NotionDatabaseByIdentity.Where(kv => string.Equals(kv.Value, databaseId, StringComparison.Ordinal)).Select(kv => kv.Key).ToList();
+                                foreach (var k in staleKeys) _cfg.NotionDatabaseByIdentity.Remove(k);
+                                if (staleKeys.Count > 0) TrySaveConfig();
+                            }
+                            if (string.Equals(_cfg.NotionDatabaseId, databaseId, StringComparison.Ordinal))
+                            {
+                                _cfg.NotionDatabaseId = string.Empty; TrySaveConfig();
+                            }
                         }
-                        if (string.Equals(_cfg.NotionDatabaseId, databaseId, StringComparison.Ordinal))
+                        catch { }
+                        // Re-provision once
+                        try
                         {
-                            _cfg.NotionDatabaseId = string.Empty; TrySaveConfig();
+                            var ok = await EnsureProvisionedAsync(snap, ct).ConfigureAwait(false);
+                            if (ok)
+                            {
+                                var newId = ResolveDbIdForSnapshot(snap);
+                                if (!string.IsNullOrWhiteSpace(newId)) databaseId = newId!;
+                            }
                         }
+                        catch { }
                     }
-                    catch { }
-                    // Ensure we have a valid DB (query may have been 404); refresh mapping proactively
-                    try
-                    {
-                        var ok = await EnsureProvisionedAsync(snap, ct).ConfigureAwait(false);
-                        if (ok)
-                        {
-                            var newId = ResolveDbIdForSnapshot(snap);
-                            if (!string.IsNullOrWhiteSpace(newId)) databaseId = newId!;
-                        }
-                    }
-                    catch { }
                     await CreatePageAsync(databaseId, snap, it, extId, ct).ConfigureAwait(false);
                 }
             }
@@ -210,7 +215,7 @@ namespace XIVSubmarinesReturn.Services
             }
         }
 
-        private async Task<string?> TryFindPageIdByExtIdAsync(string databaseId, string extId, CancellationToken ct)
+        private async Task<(string? pageId, bool dbNotFound)> TryFindPageIdByExtIdAsync(string databaseId, string extId, CancellationToken ct)
         {
             try
             {
@@ -235,27 +240,30 @@ namespace XIVSubmarinesReturn.Services
                 if (!resp.IsSuccessStatusCode)
                 {
                     if ((int)resp.StatusCode == 404)
+                    {
                         XsrDebug.Log(_cfg, $"Notion query 404 for db={databaseId}");
+                        return (null, true);
+                    }
                     if (_cfg.DebugLogging)
                         _log.Warning($"Notion query failed: {(int)resp.StatusCode} {resp.ReasonPhrase} body={body}");
                     else
                         _log.Warning($"Notion query failed: {(int)resp.StatusCode} {resp.ReasonPhrase}");
-                    return null;
+                    return (null, false);
                 }
                 using var doc = JsonDocument.Parse(body);
                 var arr = doc.RootElement.GetProperty("results");
                 if (arr.GetArrayLength() > 0)
                 {
                     var id = arr[0].GetProperty("id").GetString();
-                    return id;
+                    return (id, false);
                 }
-                return null;
+                return (null, false);
             }
             catch (Exception ex)
             {
                 _log.Warning(ex, "Notion query exception");
                 XsrDebug.Log(_cfg, "Notion query exception", ex);
-                return null;
+                return (null, false);
             }
         }
 
