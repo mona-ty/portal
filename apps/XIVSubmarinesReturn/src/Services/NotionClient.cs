@@ -308,27 +308,26 @@ namespace XIVSubmarinesReturn.Services
                     if (!resp2.IsSuccessStatusCode)
                     {
                         var body2 = await resp2.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
-                        if (_cfg.DebugLogging)
-                            _log.Warning($"Notion send failed (retry): {(int)resp2.StatusCode} {resp2.ReasonPhrase} body={body2}");
-                        else
-                            _log.Warning($"Notion send failed (retry): {(int)resp2.StatusCode} {resp2.ReasonPhrase}");
-                        XsrDebug.Log(_cfg, $"Notion send failed (retry): {(int)resp2.StatusCode}");
+                        var msg = _cfg.DebugLogging ? $"Notion send failed (retry): {(int)resp2.StatusCode} {resp2.ReasonPhrase} body={body2}" : $"Notion send failed (retry): {(int)resp2.StatusCode} {resp2.ReasonPhrase}";
+                        _log.Warning(msg);
+                        XsrDebug.Log(_cfg, msg);
+                        throw new HttpRequestException(msg);
                     }
                 }
                 else if (!resp.IsSuccessStatusCode)
                 {
                     var body = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
-                    if (_cfg.DebugLogging)
-                        _log.Warning($"Notion send failed: {(int)resp.StatusCode} {resp.ReasonPhrase} body={body}");
-                    else
-                        _log.Warning($"Notion send failed: {(int)resp.StatusCode} {resp.ReasonPhrase}");
-                    XsrDebug.Log(_cfg, $"Notion send failed: {(int)resp.StatusCode}");
+                    var msg = _cfg.DebugLogging ? $"Notion send failed: {(int)resp.StatusCode} {resp.ReasonPhrase} body={body}" : $"Notion send failed: {(int)resp.StatusCode} {resp.ReasonPhrase}";
+                    _log.Warning(msg);
+                    XsrDebug.Log(_cfg, msg);
+                    throw new HttpRequestException(msg);
                 }
             }
             catch (Exception ex)
             {
                 _log.Warning(ex, "Notion send exception");
                 XsrDebug.Log(_cfg, "Notion send exception", ex);
+                throw;
             }
         }
 
