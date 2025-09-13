@@ -26,6 +26,7 @@ namespace XIVSubmarinesReturn.Services
         private const string NotionVersion = "2022-06-28";
         private readonly Dalamud.Plugin.IDalamudPluginInterface? _pi;
         private static readonly System.Threading.SemaphoreSlim _provLock = new(1, 1);
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, DateTimeOffset> _recentDbCreatedAt = new(System.StringComparer.Ordinal);
 
         public NotionClient(Configuration cfg, Dalamud.Plugin.Services.IPluginLog log, HttpClient http, Dalamud.Plugin.IDalamudPluginInterface? pi = null)
         {
@@ -139,6 +140,16 @@ namespace XIVSubmarinesReturn.Services
         {
             try
             {
+                // Grace period: treat very-recently created DB as existing to avoid eventual-consistency 404s
+                try
+                {
+                    if (_recentDbCreatedAt.TryGetValue(databaseId, out var ts))
+                    {
+                        if ((DateTimeOffset.UtcNow - ts) < TimeSpan.FromSeconds(90)) return true;
+                        else _recentDbCreatedAt.TryRemove(databaseId, out _);
+                    }
+                }
+                catch { }
                 var url = $"https://api.notion.com/v1/databases/{databaseId}";
                 using var req = new HttpRequestMessage(HttpMethod.Get, url);
                 req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _cfg.NotionToken);
@@ -472,7 +483,9 @@ namespace XIVSubmarinesReturn.Services
                     return null;
                 }
                 using var doc = JsonDocument.Parse(body);
-                return doc.RootElement.TryGetProperty("id", out var idEl) ? idEl.GetString() : null;
+                var id = doc.RootElement.TryGetProperty("id", out var idEl) ? idEl.GetString() : null;
+                try { if (!string.IsNullOrWhiteSpace(id)) _recentDbCreatedAt[id!] = DateTimeOffset.UtcNow; } catch { }
+                return id;
             }
             catch (Exception ex)
             {
