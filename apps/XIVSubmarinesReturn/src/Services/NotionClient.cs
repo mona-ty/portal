@@ -14,6 +14,8 @@ namespace XIVSubmarinesReturn.Services
     public interface INotionClient
     {
         Task UpsertSnapshotAsync(SubmarineSnapshot snap, bool latestOnly, CancellationToken ct = default);
+        Task<bool> EnsureProvisionedAsync(CancellationToken ct = default);
+        Task<string> EnsureDatabasePropsAsync(CancellationToken ct = default);
     }
 
     internal sealed class NotionClient : INotionClient
@@ -22,10 +24,11 @@ namespace XIVSubmarinesReturn.Services
         private readonly Dalamud.Plugin.Services.IPluginLog _log;
         private readonly HttpClient _http;
         private const string NotionVersion = "2022-06-28";
+        private readonly Dalamud.Plugin.IDalamudPluginInterface? _pi;
 
-        public NotionClient(Configuration cfg, Dalamud.Plugin.Services.IPluginLog log, HttpClient http)
+        public NotionClient(Configuration cfg, Dalamud.Plugin.Services.IPluginLog log, HttpClient http, Dalamud.Plugin.IDalamudPluginInterface? pi = null)
         {
-            _cfg = cfg; _log = log; _http = http;
+            _cfg = cfg; _log = log; _http = http; _pi = pi;
         }
 
         public async Task UpsertSnapshotAsync(SubmarineSnapshot snap, bool latestOnly, CancellationToken ct = default)
@@ -34,7 +37,10 @@ namespace XIVSubmarinesReturn.Services
             {
                 if (snap is null) return;
                 if (!_cfg.NotionEnabled) return;
-                if (string.IsNullOrWhiteSpace(_cfg.NotionToken) || string.IsNullOrWhiteSpace(_cfg.NotionDatabaseId)) return;
+                if (string.IsNullOrWhiteSpace(_cfg.NotionToken)) return;
+                // Ensure DB is provisioned (auto-create if missing or properties incomplete)
+                try { await EnsureProvisionedAsync(ct).ConfigureAwait(false); } catch { }
+                if (string.IsNullOrWhiteSpace(_cfg.NotionDatabaseId)) return;
                 var items = (snap.Items ?? new List<SubmarineRecord>()).ToList();
                 if (items.Count == 0) return;
                 if (latestOnly)
@@ -51,6 +57,38 @@ namespace XIVSubmarinesReturn.Services
             {
                 _log.Warning(ex, "Notion upsert failed");
                 XsrDebug.Log(_cfg, "Notion upsert failed", ex);
+            }
+        }
+
+        public async Task<bool> EnsureProvisionedAsync(CancellationToken ct = default)
+        {
+            try
+            {
+                if (!_cfg.NotionEnabled) return false;
+                if (string.IsNullOrWhiteSpace(_cfg.NotionToken)) return false;
+
+                // If DB is set, ensure properties exist (and add missing)
+                if (!string.IsNullOrWhiteSpace(_cfg.NotionDatabaseId))
+                {
+                    try { await EnsureDatabasePropsAndFixAsync(ct).ConfigureAwait(false); } catch { }
+                    return true;
+                }
+
+                // Create a workspace page, then a database under it
+                var pageId = await CreateWorkspacePageAsync("XSR Notifications", ct).ConfigureAwait(false);
+                if (string.IsNullOrWhiteSpace(pageId)) { XsrDebug.Log(_cfg, "Notion: page create failed"); return false; }
+                var dbId = await CreateDatabaseAsync(pageId!, "XSR Submarines", ct).ConfigureAwait(false);
+                if (string.IsNullOrWhiteSpace(dbId)) { XsrDebug.Log(_cfg, "Notion: database create failed"); return false; }
+                _cfg.NotionDatabaseId = dbId!;
+                TrySaveConfig();
+                XsrDebug.Log(_cfg, $"Notion: database provisioned id={dbId}");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _log.Warning(ex, "Notion EnsureProvisioned failed");
+                XsrDebug.Log(_cfg, "Notion EnsureProvisioned failed", ex);
+                return false;
             }
         }
 
@@ -201,6 +239,233 @@ namespace XIVSubmarinesReturn.Services
                 _log.Warning(ex, "Notion send exception");
                 XsrDebug.Log(_cfg, "Notion send exception", ex);
             }
+        }
+
+        private async Task<string?> CreateWorkspacePageAsync(string title, CancellationToken ct)
+        {
+            try
+            {
+                var url = "https://api.notion.com/v1/pages";
+                var payload = new
+                {
+                    parent = new { workspace = true },
+                    properties = new
+                    {
+                        title = new
+                        {
+                            title = new[] { new { text = new { content = title } } }
+                        }
+                    }
+                };
+                var json = JsonSerializer.Serialize(payload);
+                using var req = new HttpRequestMessage(HttpMethod.Post, url)
+                {
+                    Content = new StringContent(json, Encoding.UTF8, "application/json")
+                };
+                req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _cfg.NotionToken);
+                req.Headers.Add("Notion-Version", NotionVersion);
+                using var resp = await _http.SendAsync(req, ct).ConfigureAwait(false);
+                var body = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+                if (!resp.IsSuccessStatusCode)
+                {
+                    if (_cfg.DebugLogging) _log.Warning($"Notion page create failed: {(int)resp.StatusCode} {resp.ReasonPhrase} body={body}");
+                    else _log.Warning($"Notion page create failed: {(int)resp.StatusCode} {resp.ReasonPhrase}");
+                    return null;
+                }
+                using var doc = JsonDocument.Parse(body);
+                return doc.RootElement.TryGetProperty("id", out var idEl) ? idEl.GetString() : null;
+            }
+            catch (Exception ex)
+            {
+                _log.Warning(ex, "Notion page create exception");
+                XsrDebug.Log(_cfg, "Notion page create exception", ex);
+                return null;
+            }
+        }
+
+        private async Task<string?> CreateDatabaseAsync(string parentPageId, string title, CancellationToken ct)
+        {
+            try
+            {
+                string nameProp = _cfg.NotionPropName ?? "Name";
+                string slotProp = _cfg.NotionPropSlot ?? "Slot";
+                string etaProp = _cfg.NotionPropEta ?? "ETA";
+                string routeProp = _cfg.NotionPropRoute ?? "Route";
+                string rankProp = _cfg.NotionPropRank ?? "Rank";
+                string extProp = _cfg.NotionPropExtId ?? "ExtId";
+                string remProp = _cfg.NotionPropRemaining ?? "Remaining";
+                string worldProp = _cfg.NotionPropWorld ?? "World";
+                string charProp = _cfg.NotionPropCharacter ?? "Character";
+                string fcProp = _cfg.NotionPropFC ?? "FC";
+
+                var url = "https://api.notion.com/v1/databases";
+                var payload = new
+                {
+                    parent = new { type = "page_id", page_id = parentPageId },
+                    title = new[] { new { type = "text", text = new { content = title } } },
+                    properties = new System.Collections.Generic.Dictionary<string, object>
+                    {
+                        [nameProp] = new { title = new { } },
+                        [slotProp] = new { number = new { } },
+                        [etaProp] = new { date = new { } },
+                        [routeProp] = new { rich_text = new { } },
+                        [rankProp] = new { number = new { } },
+                        [extProp] = new { rich_text = new { } },
+                        [remProp] = new { rich_text = new { } },
+                        [worldProp] = new { rich_text = new { } },
+                        [charProp] = new { rich_text = new { } },
+                        [fcProp] = new { rich_text = new { } },
+                    }
+                };
+                var json = JsonSerializer.Serialize(payload);
+                using var req = new HttpRequestMessage(HttpMethod.Post, url)
+                {
+                    Content = new StringContent(json, Encoding.UTF8, "application/json")
+                };
+                req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _cfg.NotionToken);
+                req.Headers.Add("Notion-Version", NotionVersion);
+                using var resp = await _http.SendAsync(req, ct).ConfigureAwait(false);
+                var body = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+                if (!resp.IsSuccessStatusCode)
+                {
+                    if (_cfg.DebugLogging) _log.Warning($"Notion db create failed: {(int)resp.StatusCode} {resp.ReasonPhrase} body={body}");
+                    else _log.Warning($"Notion db create failed: {(int)resp.StatusCode} {resp.ReasonPhrase}");
+                    return null;
+                }
+                using var doc = JsonDocument.Parse(body);
+                return doc.RootElement.TryGetProperty("id", out var idEl) ? idEl.GetString() : null;
+            }
+            catch (Exception ex)
+            {
+                _log.Warning(ex, "Notion db create exception");
+                XsrDebug.Log(_cfg, "Notion db create exception", ex);
+                return null;
+            }
+        }
+
+        private async Task EnsureDatabasePropsAndFixAsync(CancellationToken ct)
+        {
+            try
+            {
+                var check = await EnsureDatabasePropsAsync(ct).ConfigureAwait(false);
+                if (check.StartsWith("Notion: プロパティOK", StringComparison.Ordinal)) return;
+
+                // Parse missing from message and try to add
+                var toAdd = new List<(string name, string type)>();
+                if (check.Contains("Missing:"))
+                {
+                    try
+                    {
+                        var mPart = check.Split("Missing:")[1];
+                        var lst = mPart.Split('.')?[0] ?? string.Empty;
+                        foreach (var raw in lst.Split(',', StringSplitOptions.RemoveEmptyEntries))
+                        {
+                            var name = raw.Trim();
+                            if (string.IsNullOrWhiteSpace(name)) continue;
+                            // Map expected types by configured property names
+                            string type = GuessPropType(name);
+                            if (!string.IsNullOrEmpty(type)) toAdd.Add((name, type));
+                        }
+                    }
+                    catch { }
+                }
+                if (toAdd.Count == 0) return;
+
+                var url = $"https://api.notion.com/v1/databases/{_cfg.NotionDatabaseId}";
+                var props = new Dictionary<string, object>(StringComparer.Ordinal);
+                foreach (var (name, type) in toAdd)
+                {
+                    props[name] = type switch
+                    {
+                        "title" => new { title = new { } },
+                        "number" => new { number = new { } },
+                        "date" => new { date = new { } },
+                        _ => new { rich_text = new { } },
+                    };
+                }
+                var payload = new { properties = props };
+                await SendAsync(url, HttpMethod.Patch, payload, ct).ConfigureAwait(false);
+                XsrDebug.Log(_cfg, $"Notion: added missing props [{string.Join(",", toAdd.Select(x => x.name))}]");
+            }
+            catch (Exception ex)
+            {
+                _log.Warning(ex, "Notion fix props failed");
+                XsrDebug.Log(_cfg, "Notion fix props failed", ex);
+            }
+        }
+
+        private string GuessPropType(string name)
+        {
+            try
+            {
+                if (string.Equals(name, _cfg.NotionPropName ?? "Name", StringComparison.Ordinal)) return "title";
+                if (string.Equals(name, _cfg.NotionPropSlot ?? "Slot", StringComparison.Ordinal)) return "number";
+                if (string.Equals(name, _cfg.NotionPropEta ?? "ETA", StringComparison.Ordinal)) return "date";
+                if (string.Equals(name, _cfg.NotionPropRank ?? "Rank", StringComparison.Ordinal)) return "number";
+                // others are rich_text
+                return "rich_text";
+            }
+            catch { return "rich_text"; }
+        }
+
+        private void TrySaveConfig()
+        {
+            try { _pi?.SavePluginConfig(_cfg); } catch { }
+        }
+
+        public static string? TryExtractIdFromUrlOrId(string? input)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(input)) return null;
+                var s = input.Trim();
+                // If it's already a 36-char dashed UUID, normalize by stripping and re-dashing
+                string OnlyHex(string t)
+                {
+                    var sb = new StringBuilder(t.Length);
+                    foreach (var ch in t)
+                    {
+                        if ((ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f') || (ch >= 'A' && ch <= 'F')) sb.Append(char.ToLowerInvariant(ch));
+                    }
+                    return sb.ToString();
+                }
+
+                string Redash32(string hex)
+                {
+                    if (hex.Length != 32) return hex;
+                    return string.Create(36, hex, (span, state) =>
+                    {
+                        // 8-4-4-4-12
+                        var i = 0;
+                        span[8] = '-'; span[13] = '-'; span[18] = '-'; span[23] = '-';
+                        for (int si = 0, di = 0; si < 32; si++, di++)
+                        {
+                            if (di == 8 || di == 13 || di == 18 || di == 23) di++;
+                            span[di] = state[si];
+                        }
+                    });
+                }
+
+                // Scan from tail for 32 hex characters
+                var hexSb = new StringBuilder(32);
+                for (int i = s.Length - 1; i >= 0 && hexSb.Length < 32; i--)
+                {
+                    char ch = s[i];
+                    if ((ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f') || (ch >= 'A' && ch <= 'F'))
+                        hexSb.Append(char.ToLowerInvariant(ch));
+                }
+                if (hexSb.Length == 32)
+                {
+                    var hex = new string(hexSb.ToString().Reverse().ToArray());
+                    return Redash32(hex);
+                }
+
+                // If input might be a dashed UUID but not at tail, strip and re-dash
+                var only = OnlyHex(s);
+                if (only.Length == 32) return Redash32(only);
+                return null;
+            }
+            catch { return null; }
         }
 
         private object BuildProperties(SubmarineSnapshot snap, SubmarineRecord it, string extId)
