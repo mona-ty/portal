@@ -36,11 +36,11 @@ namespace XIVSubmarinesReturn.Services
             try
             {
                 if (snap is null) return;
-                if (!_cfg.NotionEnabled) return;
-                if (string.IsNullOrWhiteSpace(_cfg.NotionToken)) return;
+                if (!_cfg.NotionEnabled) { XsrDebug.Log(_cfg, "Notion: skip (disabled)"); return; }
+                if (string.IsNullOrWhiteSpace(_cfg.NotionToken)) { XsrDebug.Log(_cfg, "Notion: skip (no token)"); return; }
                 // Ensure DB is provisioned (auto-create if missing or properties incomplete)
                 try { await EnsureProvisionedAsync(ct).ConfigureAwait(false); } catch { }
-                if (string.IsNullOrWhiteSpace(_cfg.NotionDatabaseId)) return;
+                if (string.IsNullOrWhiteSpace(_cfg.NotionDatabaseId)) { XsrDebug.Log(_cfg, "Notion: skip (no database id)"); return; }
                 var items = (snap.Items ?? new List<SubmarineRecord>()).ToList();
                 if (items.Count == 0) return;
                 if (latestOnly)
