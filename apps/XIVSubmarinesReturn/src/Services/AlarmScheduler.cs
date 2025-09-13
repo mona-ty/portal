@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using XIVSubmarinesReturn;
 
 namespace XIVSubmarinesReturn.Services
 {
@@ -11,50 +12,66 @@ namespace XIVSubmarinesReturn.Services
         void UpdateSnapshot(SubmarineSnapshot snap);
         void Tick(DateTimeOffset now);
     }
+}
 
-    public sealed class AlarmScheduler : IAlarmScheduler
+    public sealed class AlarmScheduler : XIVSubmarinesReturn.Services.IAlarmScheduler
     {
-        private readonly Configuration _cfg;
+        private readonly XIVSubmarinesReturn.Configuration _cfg;
         private readonly Dalamud.Plugin.Services.IChatGui _chat;
         private readonly Dalamud.Plugin.Services.IToastGui _toast;
         private readonly Dalamud.Plugin.Services.IPluginLog _log;
-        private readonly IDiscordNotifier _discord;
-        private readonly INotionClient? _notion;
+        private readonly XIVSubmarinesReturn.Services.IDiscordNotifier _discord;
+        private readonly XIVSubmarinesReturn.Services.INotionClient? _notion;
 
         private readonly object _gate = new();
-        private SubmarineSnapshot? _current;
+        private XIVSubmarinesReturn.SubmarineSnapshot? _current;
         private readonly HashSet<string> _fired = new(StringComparer.Ordinal);
+        private string _lastSnapshotKey = string.Empty;
+        private DateTimeOffset _lastDiscordSnapshotUtc = DateTimeOffset.MinValue;
         private readonly Dictionary<string, int> _prevMins = new(StringComparer.Ordinal);
 
-        public AlarmScheduler(Configuration cfg,
+        public AlarmScheduler(XIVSubmarinesReturn.Configuration cfg,
             Dalamud.Plugin.Services.IChatGui chat,
             Dalamud.Plugin.Services.IToastGui toast,
             Dalamud.Plugin.Services.IPluginLog log,
-            IDiscordNotifier discord,
-            INotionClient? notion = null)
+            XIVSubmarinesReturn.Services.IDiscordNotifier discord,
+            XIVSubmarinesReturn.Services.INotionClient? notion = null)
         {
             _cfg = cfg; _chat = chat; _toast = toast; _log = log; _discord = discord;
             _notion = notion;
         }
 
-        public void UpdateSnapshot(SubmarineSnapshot snap)
+        public void UpdateSnapshot(XIVSubmarinesReturn.SubmarineSnapshot snap)
         {
             try
             {
+                string newKey = ComputeSnapshotKey(snap);
+                bool changed = false;
                 lock (_gate)
                 {
                     _current = snap;
-                }
-
-                // Discord snapshot通知（非同期）
-                _ = Task.Run(async () =>
-                {
-                    try
+                    if (!string.Equals(_lastSnapshotKey, newKey, StringComparison.Ordinal))
                     {
-                        await _discord.NotifySnapshotAsync(snap, _cfg.DiscordLatestOnly).ConfigureAwait(false);
+                        _lastSnapshotKey = newKey;
+                        changed = true;
                     }
-                    catch (Exception ex) { _log.Warning(ex, "Discord snapshot task failed"); }
-                });
+                }
+                // Discord snapshot通知（変更時のみ、非同期）
+                var now = DateTimeOffset.UtcNow;
+                var minIv = TimeSpan.FromMinutes(Math.Max(0, _cfg.DiscordMinIntervalMinutes));
+                var intervalOk = (minIv <= TimeSpan.Zero) || (now - _lastDiscordSnapshotUtc >= minIv);
+                if (changed && intervalOk)
+                {
+                    _ = Task.Run(async () =>
+                    {
+                        try
+                        {
+                            await _discord.NotifySnapshotAsync(snap, _cfg.DiscordLatestOnly).ConfigureAwait(false);
+                        }
+                        catch (Exception ex) { _log.Warning(ex, "Discord snapshot task failed"); }
+                    });
+                    _lastDiscordSnapshotUtc = now;
+                }
 
                 // Notion upsert（非同期）
                 _ = Task.Run(async () =>
@@ -125,5 +142,17 @@ var hadPrev = _prevMins.TryGetValue(idKey, out var prevMins);
             }
         }
 
+        private static string ComputeSnapshotKey(XIVSubmarinesReturn.SubmarineSnapshot snap)
+    {
+        try
+        {
+            var items = (snap.Items ?? new List<SubmarineRecord>())
+                .Select(x => new { x.Name, x.Slot, x.Rank, x.RouteKey, x.EtaUnix })
+                .OrderBy(x => x.Slot ?? 0).ThenBy(x => x.Name ?? string.Empty, StringComparer.Ordinal)
+                .ToArray();
+            var obj = new { Items = items };
+            return System.Text.Json.JsonSerializer.Serialize(obj);
+        }
+        catch { return string.Empty; }
     }
-}
+    }

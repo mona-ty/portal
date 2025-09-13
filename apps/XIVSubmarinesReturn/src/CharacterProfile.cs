@@ -19,5 +19,8 @@ namespace XIVSubmarinesReturn
 
         // 直近のスナップショット（プロファイル毎に永続化）
         public SubmarineSnapshot? LastSnapshot { get; set; }
+
+        // 降格防止のための「最後に良かったルート」永続キャッシュ（Character|World|Slot）
+        public Dictionary<int, LastGoodRoute> LastGoodRouteBySlot { get; set; } = new();
     }
 }

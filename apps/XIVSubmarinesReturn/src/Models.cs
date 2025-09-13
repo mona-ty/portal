@@ -3,6 +3,23 @@ using System.Collections.Generic;
 
 namespace XIVSubmarinesReturn
 {
+    public enum RouteConfidence
+    {
+        None = 0,
+        Tail = 1,
+        Partial = 2,
+        Full = 3,
+        Array = 4, // RequestedUpdate(ArrayData) 直読
+    }
+
+    public sealed class LastGoodRoute
+    {
+        public string RouteKey { get; set; } = string.Empty; // Point-xx - ...
+        public RouteConfidence Confidence { get; set; } = RouteConfidence.None;
+        public DateTimeOffset CapturedAtUtc { get; set; } = DateTimeOffset.MinValue;
+        public string Source { get; set; } = string.Empty; // mem|cache|array
+    }
+
     public sealed class SubmarineRecord
     {
         public string Name { get; set; } = string.Empty;
