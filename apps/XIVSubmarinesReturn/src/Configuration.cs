@@ -146,11 +146,7 @@ public class Configuration : IPluginConfiguration
     public string NotionPropRoute { get; set; } = "Route";     // rich_text
     public string NotionPropRank { get; set; } = "Rank";       // number
     public string NotionPropExtId { get; set; } = "ExtId";     // rich_text (for upsert)
-    // v2 additions
-    public string NotionPropRemaining { get; set; } = "Remaining";   // rich_text
-    public string NotionPropWorld { get; set; } = "World";           // rich_text
-    public string NotionPropCharacter { get; set; } = "Character";   // rich_text
-    public string NotionPropFC { get; set; } = "FC";                 // rich_text
+    // 余分な付加情報（World/Character/FC/Remaining）は廃止（DB簡素化）
 
     public void Save(IDalamudPluginInterface pi)
     {

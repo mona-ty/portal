@@ -301,11 +301,6 @@ namespace XIVSubmarinesReturn.Services
                 string routeProp = _cfg.NotionPropRoute ?? "Route";
                 string rankProp = _cfg.NotionPropRank ?? "Rank";
                 string extProp = _cfg.NotionPropExtId ?? "ExtId";
-                string remProp = _cfg.NotionPropRemaining ?? "Remaining";
-                string worldProp = _cfg.NotionPropWorld ?? "World";
-                string charProp = _cfg.NotionPropCharacter ?? "Character";
-                string fcProp = _cfg.NotionPropFC ?? "FC";
-
                 var url = "https://api.notion.com/v1/databases";
                 var payload = new
                 {
@@ -319,10 +314,6 @@ namespace XIVSubmarinesReturn.Services
                         [routeProp] = new { rich_text = new { } },
                         [rankProp] = new { number = new { } },
                         [extProp] = new { rich_text = new { } },
-                        [remProp] = new { rich_text = new { } },
-                        [worldProp] = new { rich_text = new { } },
-                        [charProp] = new { rich_text = new { } },
-                        [fcProp] = new { rich_text = new { } },
                     }
                 };
                 var json = JsonSerializer.Serialize(payload);
@@ -410,7 +401,7 @@ namespace XIVSubmarinesReturn.Services
                 if (string.Equals(name, _cfg.NotionPropSlot ?? "Slot", StringComparison.Ordinal)) return "number";
                 if (string.Equals(name, _cfg.NotionPropEta ?? "ETA", StringComparison.Ordinal)) return "date";
                 if (string.Equals(name, _cfg.NotionPropRank ?? "Rank", StringComparison.Ordinal)) return "number";
-                // others are rich_text
+                // others default to rich_text
                 return "rich_text";
             }
             catch { return "rich_text"; }
@@ -486,10 +477,7 @@ namespace XIVSubmarinesReturn.Services
             string routeProp = _cfg.NotionPropRoute ?? "Route";
             string rankProp = _cfg.NotionPropRank ?? "Rank";
             string extProp = _cfg.NotionPropExtId ?? "ExtId";
-            string remProp = _cfg.NotionPropRemaining ?? "Remaining";
-            string worldProp = _cfg.NotionPropWorld ?? "World";
-            string charProp = _cfg.NotionPropCharacter ?? "Character";
-            string fcProp = _cfg.NotionPropFC ?? "FC";
+            // Optional fields (Remaining/World/Character/FC) are removed for simplicity
 
             var title = (it.Name ?? string.Empty);
             props[nameProp] = new { title = new[] { new { text = new { content = title } } } };
@@ -513,26 +501,7 @@ namespace XIVSubmarinesReturn.Services
             // external id for upsert
             props[extProp] = new { rich_text = new[] { new { text = new { content = extId } } } };
 
-            // Remaining text (human-friendly)
-            try
-            {
-                var remaining = (it.Extra != null && it.Extra.TryGetValue("RemainingText", out var r)) ? r : string.Empty;
-                if (!string.IsNullOrWhiteSpace(remaining))
-                    props[remProp] = new { rich_text = new[] { new { text = new { content = remaining } } } };
-            }
-            catch { }
-
-            // Identity (from snapshot)
-            try
-            {
-                if (!string.IsNullOrWhiteSpace(snap?.World))
-                    props[worldProp] = new { rich_text = new[] { new { text = new { content = snap.World } } } };
-                if (!string.IsNullOrWhiteSpace(snap?.Character))
-                    props[charProp] = new { rich_text = new[] { new { text = new { content = snap.Character } } } };
-                if (!string.IsNullOrWhiteSpace(snap?.FreeCompany))
-                    props[fcProp] = new { rich_text = new[] { new { text = new { content = snap.FreeCompany } } } };
-            }
-            catch { }
+            // No extra snapshot identity fields are sent
 
             return props;
         }
@@ -616,10 +585,6 @@ namespace XIVSubmarinesReturn.Services
                     (_cfg.NotionPropRoute ?? "Route", "rich_text"),
                     (_cfg.NotionPropRank ?? "Rank", "number"),
                     (_cfg.NotionPropExtId ?? "ExtId", "rich_text"),
-                    (_cfg.NotionPropRemaining ?? "Remaining", "rich_text"),
-                    (_cfg.NotionPropWorld ?? "World", "rich_text"),
-                    (_cfg.NotionPropCharacter ?? "Character", "rich_text"),
-                    (_cfg.NotionPropFC ?? "FC", "rich_text"),
                 };
 
                 var missing = new List<string>();

@@ -644,14 +644,7 @@ public sealed partial class Plugin
                         if (ImGui.InputText("Prop: Rank (number)", ref prk, 64)) { Config.NotionPropRank = prk; SaveConfig(); }
                         var px = Config.NotionPropExtId ?? "ExtId";
                         if (ImGui.InputText("Prop: ExtId (rich_text)", ref px, 64)) { Config.NotionPropExtId = px; SaveConfig(); }
-                        var prem = Config.NotionPropRemaining ?? "Remaining";
-                        if (ImGui.InputText("Prop: Remaining (rich_text)", ref prem, 64)) { Config.NotionPropRemaining = prem; SaveConfig(); }
-                        var pw = Config.NotionPropWorld ?? "World";
-                        if (ImGui.InputText("Prop: World (rich_text)", ref pw, 64)) { Config.NotionPropWorld = pw; SaveConfig(); }
-                        var pc = Config.NotionPropCharacter ?? "Character";
-                        if (ImGui.InputText("Prop: Character (rich_text)", ref pc, 64)) { Config.NotionPropCharacter = pc; SaveConfig(); }
-                        var pfc = Config.NotionPropFC ?? "FC";
-                        if (ImGui.InputText("Prop: FC (rich_text)", ref pfc, 64)) { Config.NotionPropFC = pfc; SaveConfig(); }
+                        // 付加情報（Remaining/World/Character/FC）は廃止
 
                         if (ImGui.Button("プロパティ検証"))
                         {
@@ -1072,14 +1065,7 @@ public sealed partial class Plugin
                 if (ImGui.InputText("Prop: Rank (number)", ref prk, 64)) { Config.NotionPropRank = prk; SaveConfig(); }
                 var px = Config.NotionPropExtId ?? "ExtId";
                 if (ImGui.InputText("Prop: ExtId (rich_text)", ref px, 64)) { Config.NotionPropExtId = px; SaveConfig(); }
-                var prem = Config.NotionPropRemaining ?? "Remaining";
-                if (ImGui.InputText("Prop: Remaining (rich_text)", ref prem, 64)) { Config.NotionPropRemaining = prem; SaveConfig(); }
-                var pw = Config.NotionPropWorld ?? "World";
-                if (ImGui.InputText("Prop: World (rich_text)", ref pw, 64)) { Config.NotionPropWorld = pw; SaveConfig(); }
-                var pc = Config.NotionPropCharacter ?? "Character";
-                if (ImGui.InputText("Prop: Character (rich_text)", ref pc, 64)) { Config.NotionPropCharacter = pc; SaveConfig(); }
-                var pfc = Config.NotionPropFC ?? "FC";
-                if (ImGui.InputText("Prop: FC (rich_text)", ref pfc, 64)) { Config.NotionPropFC = pfc; SaveConfig(); }
+                // 付加情報（Remaining/World/Character/FC）は廃止
 
                 if (ImGui.Button("Validate properties"))
                 {
