@@ -418,6 +418,8 @@ namespace XIVSubmarinesReturn.Services
             {
                 if (string.IsNullOrWhiteSpace(input)) return null;
                 var s = input.Trim();
+                // Prefer extracting ID from the path part (exclude query like ?v=<viewId>)
+                try { var q = s.IndexOf('?'); if (q >= 0) s = s.Substring(0, q); } catch { }
                 // If it's already a 36-char dashed UUID, normalize by stripping and re-dashing
                 string OnlyHex(string t)
                 {
@@ -445,23 +447,46 @@ namespace XIVSubmarinesReturn.Services
                     });
                 }
 
-                // Scan from tail for 32 hex characters
-                var hexSb = new StringBuilder(32);
-                for (int i = s.Length - 1; i >= 0 && hexSb.Length < 32; i--)
+                // Scan from tail (path part) for 32 hex characters (database/page id lives here)
                 {
-                    char ch = s[i];
-                    if ((ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f') || (ch >= 'A' && ch <= 'F'))
-                        hexSb.Append(char.ToLowerInvariant(ch));
-                }
-                if (hexSb.Length == 32)
-                {
-                    var hex = new string(hexSb.ToString().Reverse().ToArray());
-                    return Redash32(hex);
+                    var hexSb = new StringBuilder(32);
+                    for (int i = s.Length - 1; i >= 0 && hexSb.Length < 32; i--)
+                    {
+                        char ch = s[i];
+                        if ((ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f') || (ch >= 'A' && ch <= 'F'))
+                            hexSb.Append(char.ToLowerInvariant(ch));
+                    }
+                    if (hexSb.Length == 32)
+                    {
+                        var hex = new string(hexSb.ToString().Reverse().ToArray());
+                        return Redash32(hex);
+                    }
                 }
 
                 // If input might be a dashed UUID but not at tail, strip and re-dash
                 var only = OnlyHex(s);
                 if (only.Length == 32) return Redash32(only);
+
+                // Fallback: search entire original input (may capture view id, so pick the first 32-hex occurrence)
+                {
+                    var src = input.Trim();
+                    int count = 0; int lastIdx = -1;
+                    for (int i = 0; i <= src.Length - 32; i++)
+                    {
+                        bool ok = true;
+                        for (int j = 0; j < 32; j++)
+                        {
+                            char ch = src[i + j];
+                            if (!((ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f') || (ch >= 'A' && ch <= 'F'))) { ok = false; break; }
+                        }
+                        if (ok) { lastIdx = i; break; }
+                    }
+                    if (lastIdx >= 0)
+                    {
+                        var hex = src.Substring(lastIdx, 32);
+                        return Redash32(OnlyHex(hex));
+                    }
+                }
                 return null;
             }
             catch { return null; }
