@@ -10,6 +10,20 @@
 - Fixed:
 - Docs:
 
+## [1.1.1] - 2025-09-14
+### Added
+- Notion: 自動セットアップ（親ページURL→親ID、DB URL→ID 補助）
+- Discord: 通知先頭に [Character / FC] を付与
+
+### Changed
+- Notion: Route はレター表記（M>R>…）で送信
+- Notion: キャラ/FCごとにDBを自動作成・切替（タイトル: `XSR <Character> @ <FC>`/`XSR <Character>`）
+
+### Fixed
+- Notion 404 無限ループ対策（200(null)=ページ未作成は再作成しない／404のみ旧IDパージ→再プロビジョン→最新IDでCreate）
+- DB作成直後のGET 404を90秒間は存在扱いにし、連続再作成を抑止
+- Upsert前/アラーム経路で Character/FC をActiveプロファイルから補完
+
 ## [1.1.0] - 2025-09-13
 ### Added
 - Memory-first route recovery 強化（位相/lenhdr/zero-terminatedトグル、ArrayData採用の基盤）
