@@ -1938,6 +1938,25 @@ public sealed partial class Plugin : IDalamudPlugin
                     if (ok && snap != null)
                     {
                         try { EtaFormatter.Enrich(snap); } catch { }
+                        // Try to enrich from visible workshop panels even after memory capture
+                        try
+                        {
+                            if (EnrichFromWorkshopPanels(snap))
+                            {
+                                try
+                                {
+                                    snap.Items = snap.Items
+                                        .OrderBy(x => x.DurationMinutes.HasValue ? 0 : 1)
+                                        .ThenBy(x => x.DurationMinutes ?? int.MaxValue)
+                                        .ThenBy(x => x.Name, StringComparer.Ordinal)
+                                        .Take(4)
+                                        .ToList();
+                                }
+                                catch { }
+                                try { Services.XsrDebug.Log(Config, "Enriched snapshot from workshop panels after capture"); } catch { }
+                            }
+                        }
+                        catch { }
                         try { TryAdoptPreviousRoutes(snap); } catch { }
                         try { _alarm?.UpdateSnapshot(snap); } catch { }
                         BridgeWriter.WriteIfChanged(snap);
