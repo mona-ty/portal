@@ -67,11 +67,20 @@ namespace XIVSubmarinesReturn.Services
                 if (!_cfg.NotionEnabled) return false;
                 if (string.IsNullOrWhiteSpace(_cfg.NotionToken)) return false;
 
-                // If DB is set, ensure properties exist (and add missing)
+                // If DB is set, verify it exists. If gone (404), clear and re-create.
                 if (!string.IsNullOrWhiteSpace(_cfg.NotionDatabaseId))
                 {
-                    try { await EnsureDatabasePropsAndFixAsync(ct).ConfigureAwait(false); } catch { }
-                    return true;
+                    var exists = await CheckDatabaseExistsAsync(_cfg.NotionDatabaseId!, ct).ConfigureAwait(false);
+                    if (exists)
+                    {
+                        try { await EnsureDatabasePropsAndFixAsync(ct).ConfigureAwait(false); } catch { }
+                        return true;
+                    }
+                    else
+                    {
+                        XsrDebug.Log(_cfg, $"Notion: database id invalid or deleted: {_cfg.NotionDatabaseId}");
+                        _cfg.NotionDatabaseId = string.Empty; TrySaveConfig();
+                    }
                 }
 
                 // Determine parent page: prefer configured parent; else create a workspace page
@@ -98,6 +107,23 @@ namespace XIVSubmarinesReturn.Services
                 XsrDebug.Log(_cfg, "Notion EnsureProvisioned failed", ex);
                 return false;
             }
+        }
+
+        private async Task<bool> CheckDatabaseExistsAsync(string databaseId, CancellationToken ct)
+        {
+            try
+            {
+                var url = $"https://api.notion.com/v1/databases/{databaseId}";
+                using var req = new HttpRequestMessage(HttpMethod.Get, url);
+                req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _cfg.NotionToken);
+                req.Headers.Add("Notion-Version", NotionVersion);
+                using var resp = await _http.SendAsync(req, ct).ConfigureAwait(false);
+                if (resp.IsSuccessStatusCode) return true;
+                if ((int)resp.StatusCode == 404) return false;
+                // For other errors, assume not usable
+                return false;
+            }
+            catch { return false; }
         }
 
         private async Task UpsertOneAsync(SubmarineSnapshot snap, SubmarineRecord it, CancellationToken ct)
@@ -149,6 +175,18 @@ namespace XIVSubmarinesReturn.Services
                 var body = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
                 if (!resp.IsSuccessStatusCode)
                 {
+                    if ((int)resp.StatusCode == 404)
+                    {
+                        // Database might have been deleted; attempt re-provision once.
+                        XsrDebug.Log(_cfg, "Notion query 404: database missing; attempting re-provision");
+                        _cfg.NotionDatabaseId = string.Empty; TrySaveConfig();
+                        var ok = await EnsureProvisionedAsync(ct).ConfigureAwait(false);
+                        if (ok && !string.IsNullOrWhiteSpace(_cfg.NotionDatabaseId))
+                        {
+                            // retry once with new DB
+                            return await TryFindPageIdByExtIdAsync(_cfg.NotionDatabaseId!, extId, ct).ConfigureAwait(false);
+                        }
+                    }
                     if (_cfg.DebugLogging)
                         _log.Warning($"Notion query failed: {(int)resp.StatusCode} {resp.ReasonPhrase} body={body}");
                     else
@@ -180,7 +218,32 @@ namespace XIVSubmarinesReturn.Services
                 parent = new { database_id = databaseId },
                 properties = BuildProperties(snap, it, extId)
             };
-            await SendAsync(url, HttpMethod.Post, payload, ct).ConfigureAwait(false);
+            try
+            {
+                await SendAsync(url, HttpMethod.Post, payload, ct).ConfigureAwait(false);
+            }
+            catch
+            {
+                // If failed due to invalid DB (404), try re-provision once
+                try
+                {
+                    if (!string.IsNullOrWhiteSpace(_cfg.NotionDatabaseId))
+                    {
+                        var ok = await CheckDatabaseExistsAsync(_cfg.NotionDatabaseId!, ct).ConfigureAwait(false);
+                        if (!ok)
+                        {
+                            _cfg.NotionDatabaseId = string.Empty; TrySaveConfig();
+                            var prov = await EnsureProvisionedAsync(ct).ConfigureAwait(false);
+                            if (prov && !string.IsNullOrWhiteSpace(_cfg.NotionDatabaseId))
+                            {
+                                var payload2 = new { parent = new { database_id = _cfg.NotionDatabaseId }, properties = BuildProperties(snap, it, extId) };
+                                await SendAsync(url, HttpMethod.Post, payload2, ct).ConfigureAwait(false);
+                            }
+                        }
+                    }
+                }
+                catch { }
+            }
         }
 
         private async Task UpdatePageAsync(string pageId, SubmarineSnapshot snap, SubmarineRecord it, string extId, CancellationToken ct)
