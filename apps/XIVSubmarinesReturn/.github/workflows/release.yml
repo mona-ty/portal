@@ -41,17 +41,22 @@ jobs:
       - name: Build (Release x64 + package)
         run: |
           $ver = "${{ github.ref_name }}" -replace '^v',''
-          dotnet build ./XIVSubmarinesReturn.csproj -c Release -p:Platform=x64 -p:MakeZip=true -p:Version=$ver -p:AssemblyVersion=$ver -p:FileVersion=$ver --nologo
+          dotnet build ./XIVSubmarinesReturn.csproj -c Release -p:Platform=x64 -p:SkipPack=false -p:MakeZip=true -p:Version=$ver -p:AssemblyVersion=$ver -p:FileVersion=$ver --nologo
           echo "::group::Locate artifacts"
-          dir .\bin\Release\net9.0-windows /s
+          dir .\bin /s
           echo "::endgroup::"
         working-directory: ${{ github.workspace }}
+      - name: Locate artifact
+        id: loc
+        shell: pwsh
+        run: |
+          $zip = Get-ChildItem -Recurse -Filter latest.zip | Select-Object -First 1
+          if (-not $zip) { throw "latest.zip not found" }
+          "zip=$($zip.FullName)" >> $env:GITHUB_OUTPUT
       - name: Upload Release Assets
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            bin/Release/net9.0-windows/XIVSubmarinesReturn/latest.zip
-            bin/x64/Release/net9.0-windows/manifest.json
-            bin/x64/Release/net9.0-windows/icon.png
+          files: ${{ steps.loc.outputs.zip }}
+          generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
