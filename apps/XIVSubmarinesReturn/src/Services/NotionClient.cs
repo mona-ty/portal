@@ -40,6 +40,8 @@ namespace XIVSubmarinesReturn.Services
                 if (snap is null) return;
                 if (!_cfg.NotionEnabled) { XsrDebug.Log(_cfg, "Notion: skip (disabled)"); return; }
                 if (string.IsNullOrWhiteSpace(_cfg.NotionToken)) { XsrDebug.Log(_cfg, "Notion: skip (no token)"); return; }
+                // Identity補完（DBタイトル/Per-Identity解決のため）
+                try { EnrichIdentityFromConfig(snap); } catch { }
                 // Ensure DB is provisioned (auto-create if missing or properties incomplete)
                 string? dbId = null;
                 try { var ok = await EnsureProvisionedAsync(snap, ct).ConfigureAwait(false); if (ok) dbId = ResolveDbIdForSnapshot(snap); } catch { }
@@ -61,6 +63,23 @@ namespace XIVSubmarinesReturn.Services
                 _log.Warning(ex, "Notion upsert failed");
                 XsrDebug.Log(_cfg, "Notion upsert failed", ex);
             }
+        }
+
+        private void EnrichIdentityFromConfig(SubmarineSnapshot snap)
+        {
+            try
+            {
+                if (!string.IsNullOrWhiteSpace(snap.Character) && !string.IsNullOrWhiteSpace(snap.FreeCompany)) return;
+                var list = _cfg.Profiles ?? new System.Collections.Generic.List<CharacterProfile>();
+                CharacterProfile? prof = null;
+                if (_cfg.ActiveContentId.HasValue)
+                    prof = list.FirstOrDefault(p => p.ContentId == _cfg.ActiveContentId.Value);
+                prof ??= list.FirstOrDefault();
+                if (prof == null) return;
+                if (string.IsNullOrWhiteSpace(snap.Character) && !string.IsNullOrWhiteSpace(prof.CharacterName)) snap.Character = prof.CharacterName;
+                if (string.IsNullOrWhiteSpace(snap.FreeCompany) && !string.IsNullOrWhiteSpace(prof.FreeCompanyName)) snap.FreeCompany = prof.FreeCompanyName;
+            }
+            catch { }
         }
 
         public async Task<bool> EnsureProvisionedAsync(SubmarineSnapshot? snap = null, CancellationToken ct = default)
