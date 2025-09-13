@@ -269,8 +269,17 @@ namespace XIVSubmarinesReturn.Services
                             {
                                 var payload2 = new { parent = new { database_id = _cfg.NotionDatabaseId }, properties = BuildProperties(snap, it, extId) };
                                 await SendAsync(url, HttpMethod.Post, payload2, ct).ConfigureAwait(false);
+                                return;
                             }
                         }
+                    }
+                    // Retry with latest resolved per-identity/global DB id even if global exists
+                    var latestId = ResolveDbIdForSnapshot(snap);
+                    if (!string.IsNullOrWhiteSpace(latestId) && !string.Equals(latestId, databaseId, StringComparison.Ordinal))
+                    {
+                        var payload3 = new { parent = new { database_id = latestId }, properties = BuildProperties(snap, it, extId) };
+                        await SendAsync(url, HttpMethod.Post, payload3, ct).ConfigureAwait(false);
+                        return;
                     }
                 }
                 catch { }
