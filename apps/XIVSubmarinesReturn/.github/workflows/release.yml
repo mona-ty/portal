@@ -43,7 +43,7 @@ jobs:
           $ver = "${{ github.ref_name }}" -replace '^v',''
           dotnet build ./XIVSubmarinesReturn.csproj -c Release -p:Platform=x64 -p:SkipPack=false -p:MakeZip=true -p:Version=$ver -p:AssemblyVersion=$ver -p:FileVersion=$ver --nologo
           echo "::group::Locate artifacts"
-          dir .\bin /s
+          Get-ChildItem -Path bin -Recurse
           echo "::endgroup::"
         working-directory: ${{ github.workspace }}
       - name: Ensure latest.zip exists (fallback)
