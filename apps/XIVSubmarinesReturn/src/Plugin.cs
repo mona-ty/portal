@@ -1610,8 +1610,57 @@ public sealed partial class Plugin : IDalamudPlugin
                     existing.DurationMinutes = rec.DurationMinutes;
                 if (!existing.Rank.HasValue && rec.Rank.HasValue)
                     existing.Rank = rec.Rank;
-                if (string.IsNullOrEmpty(existing.RouteKey) && !string.IsNullOrEmpty(rec.RouteKey))
-                    existing.RouteKey = rec.RouteKey;
+
+                // Route merge policy:
+                // - If UI route has >=3 points (numeric) and current route has fewer, adopt UI route (normalize to Point-xx)
+                // - If current route is empty and UI route exists, adopt UI route
+                // - If UI route is textual (letters like M>R>O>J>Z) and provides more tokens than current, prefer it for display (RouteShort)
+                if (!string.IsNullOrWhiteSpace(rec.RouteKey))
+                {
+                    try
+                    {
+                        var curKey = existing.RouteKey ?? string.Empty;
+                        var curNums = ParseRouteNumbers(curKey);
+                        var uiNums = ParseRouteNumbers(rec.RouteKey);
+
+                        bool adopted = false; string reason = string.Empty;
+
+                        if (uiNums.Count >= 3 && uiNums.Count > curNums.Count)
+                        {
+                            // Prefer fuller UI route (numeric) and normalize
+                            existing.RouteKey = BuildRouteKeyFromNumbers(uiNums);
+                            if (existing.Extra == null) existing.Extra = new System.Collections.Generic.Dictionary<string, string>(System.StringComparer.Ordinal);
+                            existing.Extra["RouteShort"] = BuildRouteShortFromNumbers(uiNums);
+                            try { SaveCache(existing.Slot ?? 0, uiNums); } catch { }
+                            adopted = true; reason = $"ui-numeric({uiNums.Count})>cur({curNums.Count})";
+                        }
+                        else if (string.IsNullOrWhiteSpace(curKey))
+                        {
+                            // No current route: adopt UI as-is
+                            existing.RouteKey = rec.RouteKey;
+                            adopted = true; reason = "ui-override-empty";
+                        }
+
+                        // Update RouteShort if UI textual route seems more informative (more tokens)
+                        try
+                        {
+                            var uiTokens = (rec.RouteKey ?? string.Empty).Split('>').Select(s => s.Trim()).Where(s => s.Length > 0).ToList();
+                            var curShort = (existing.Extra != null && existing.Extra.TryGetValue("RouteShort", out var rs)) ? rs : curKey;
+                            var curTokens = (curShort ?? string.Empty).Split('>').Select(s => s.Trim()).Where(s => s.Length > 0).ToList();
+                            if (uiNums.Count == 0 && uiTokens.Count > curTokens.Count)
+                            {
+                                if (existing.Extra == null) existing.Extra = new System.Collections.Generic.Dictionary<string, string>(System.StringComparer.Ordinal);
+                                existing.Extra["RouteShort"] = rec.RouteKey;
+                                reason = adopted ? ($"{reason}+ui-text-short({uiTokens.Count})") : $"ui-text-short({uiTokens.Count})";
+                                adopted = true;
+                            }
+                        }
+                        catch { }
+
+                        try { Services.XsrDebug.Log(Config, adopted ? $"Adopted UI route: slot={existing.Slot ?? 0}, reason={reason}, ui='{rec.RouteKey}', cur='{curKey}'" : $"UI route ignored: ui='{rec.RouteKey}', cur='{curKey}'"); } catch { }
+                    }
+                    catch { }
+                }
             }
             return snapshot.Items.Count > 0;
         }
