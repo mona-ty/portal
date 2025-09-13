@@ -41,6 +41,12 @@ XIV Submarines Return
 - パッケージ作成（任意）: `-p:MakeZip=true` で `latest.zip` を生成（DalamudPackager）
 - バージョン確認: `/xsr version` が `1.0.0` なら反映済み
 
+Custom Repo（Dalamud）
+- 公開レポジトリの Raw URL を Dalamud → Settings → Experimental → Custom Plugin Repositories に追加
+  - Raw URL: `https://raw.githubusercontent.com/mona-ty/XIVSubmarinesReturn/main/repo.json`
+  - 検索/導入: `/xlplugins` → `XIV Submarines Return`
+  - 備考: リポジトリを Public に切替後に有効
+
 補足
 - `Local.props` が無くても、csproj は `DALAMUD_LIB_PATH` → `$(APPDATA)\\XIVLauncher\\addon\\Hooks\\dev` の順に解決
 - 他PCでもそのままビルド可能。必要に応じて `Local.props` でパスを上書き
@@ -48,4 +54,3 @@ XIV Submarines Return
 メモ（デバッグ機能）
 - `dumpraw`: ヘッダ + SelectStringの各項目（Submarine-1〜4）を出力
 - `dumptree`: 末尾に `-- SelectString items --` として抽出一覧を併記
-
