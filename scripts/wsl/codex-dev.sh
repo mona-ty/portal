@@ -4,6 +4,32 @@ set -euo pipefail
 # Defaults (use config.toml for model/approval/effort)
 CODEX_CWD="${CODEX_CWD:-/mnt/c/Codex}"
 CODEX_BIN="${CODEX_BIN:-codex}"
+# If set (1/true), launch Codex via npx @latest
+CODEX_USE_NPX_LATEST="${CODEX_USE_NPX_LATEST:-}"
+
+# If not specified via env, try config.toml: [codex] use_npx_latest = true/false
+if [[ -z "$CODEX_USE_NPX_LATEST" && -f "$CODEX_CWD/config.toml" ]]; then
+  cfg_val=$(awk '
+    BEGIN{ in_codex=0 }
+    /^[ \t]*#/ { next }
+    /^[ \t]*\[/ {
+      s=$0; gsub(/^[ \t]*\[/, "", s); gsub(/\][ \t]*$/, "", s);
+      in_codex = (s=="codex"); next
+    }
+    in_codex && $0 ~ /^[ \t]*use_npx_latest[ \t]*=/ {
+      line=$0; sub(/^[ \t]*use_npx_latest[ \t]*=[ \t]*/, "", line);
+      # normalize and detect true/false
+      line=tolower(line);
+      if (line ~ /true/) { print "true"; exit }
+      else if (line ~ /false/) { print "false"; exit }
+    }
+  ' "$CODEX_CWD/config.toml" 2>/dev/null || true)
+  if [[ "$cfg_val" == "true" ]]; then
+    CODEX_USE_NPX_LATEST=true
+  elif [[ "$cfg_val" == "false" ]]; then
+    CODEX_USE_NPX_LATEST=false
+  fi
+fi
 
 cd "$CODEX_CWD" 2>/dev/null || {
   echo "[codex-dev] CWD not found: $CODEX_CWD" >&2
@@ -82,13 +108,38 @@ fi
 
 echo "[codex-dev] Autoscan written: $out_file" >&2
 
-# Launch Codex CLI (config-driven: no explicit flags)
+# Launch Codex CLI (prefer npx @latest if requested)
+use_npx=false
+if [[ -n "$CODEX_USE_NPX_LATEST" ]]; then
+  # Treat "1" or case-insensitive "true" as enabled
+  case "${CODEX_USE_NPX_LATEST,,}" in
+    1|true) use_npx=true ;;
+  esac
+fi
+
+if $use_npx; then
+  if command -v npx >/dev/null 2>&1; then
+    echo "[codex-dev] Launching Codex via: npx -y @openai/codex@latest (NO_UPDATE_NOTIFIER=1)" >&2
+    if NO_UPDATE_NOTIFIER=1 npx -y @openai/codex@latest; then
+      exit 0
+    else
+      echo "[codex-dev] npx failed, falling back to installed Codex" >&2
+    fi
+  else
+    echo "[codex-dev] npx not found, falling back to installed Codex" >&2
+  fi
+fi
+
+# Fallback: use pre-installed codex binaries
 if command -v "$CODEX_BIN" >/dev/null 2>&1; then
-  "$CODEX_BIN" || true
+  echo "[codex-dev] Launching installed Codex: $CODEX_BIN (NO_UPDATE_NOTIFIER=1)" >&2
+  NO_UPDATE_NOTIFIER=1 "$CODEX_BIN" || true
 elif command -v codex-cli >/dev/null 2>&1; then
-  codex-cli || true
+  echo "[codex-dev] Launching installed Codex: codex-cli (NO_UPDATE_NOTIFIER=1)" >&2
+  NO_UPDATE_NOTIFIER=1 codex-cli || true
 elif command -v codex >/dev/null 2>&1; then
-  codex || true
+  echo "[codex-dev] Launching installed Codex: codex (NO_UPDATE_NOTIFIER=1)" >&2
+  NO_UPDATE_NOTIFIER=1 codex || true
 else
   echo "[codex-dev] Codex CLI not found (set CODEX_BIN or install codex)" >&2
 fi

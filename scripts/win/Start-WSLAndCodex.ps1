@@ -4,7 +4,9 @@ Param(
     [string]$Approval = $env:CODEX_APPROVAL,
     [ValidateSet('low','medium','high')]
     [string]$Effort = $env:CODEX_EFFORT,
-    [string]$Cwd = $env:CODEX_CWD
+    [string]$Cwd = $env:CODEX_CWD,
+    # Codex CLI を毎回 npx の @latest で起動する（ネット接続必須）
+    [switch]$Latest
 )
 
 if (-not $Cwd -or $Cwd -eq '') { $Cwd = 'C:\\Codex' }
@@ -20,10 +22,19 @@ if ($norm -match '^[A-Za-z]:') {
   $wslCwd = ($norm -replace '\\','/')
 }
 
-$bashCmd = "export CODEX_CWD='$wslCwd'; cd '$wslCwd'; bash ./scripts/wsl/codex-dev.sh"
+$envExports = @()
+$envExports += "export CODEX_CWD='$wslCwd'"
+if ($Latest.IsPresent) {
+  $envExports += "export CODEX_USE_NPX_LATEST='1'"
+}
+$exportsJoined = ($envExports -join '; ')
+$bashCmd = "$exportsJoined; cd '$wslCwd'; bash ./scripts/wsl/codex-dev.sh"
 
 Write-Host "[Codex] Launching in WSL (config.toml-driven)..." -ForegroundColor Cyan
 Write-Host "  CWD=$Cwd  (モデル/承認/努力度は config.toml を使用)" -ForegroundColor DarkCyan
+if ($Latest.IsPresent) {
+  Write-Host "  Codex: npx @openai/codex@latest で起動" -ForegroundColor DarkCyan
+}
 
 wsl.exe -e bash -lc $bashCmd
 

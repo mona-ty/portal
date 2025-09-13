@@ -19,3 +19,6 @@ args = [
   "serena", "start-mcp-server",
   "--context", "codex"
 ]
+
+[codex]
+use_npx_latest = true
