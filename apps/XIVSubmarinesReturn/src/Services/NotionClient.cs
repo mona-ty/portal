@@ -174,6 +174,21 @@ namespace XIVSubmarinesReturn.Services
                 }
                 else
                 {
+                    // Purge stale mapping that equals the queried databaseId to force re-provision
+                    try
+                    {
+                        if (_cfg.NotionPerIdentityDatabase && _cfg.NotionDatabaseByIdentity != null && _cfg.NotionDatabaseByIdentity.Count > 0)
+                        {
+                            var staleKeys = _cfg.NotionDatabaseByIdentity.Where(kv => string.Equals(kv.Value, databaseId, StringComparison.Ordinal)).Select(kv => kv.Key).ToList();
+                            foreach (var k in staleKeys) _cfg.NotionDatabaseByIdentity.Remove(k);
+                            if (staleKeys.Count > 0) TrySaveConfig();
+                        }
+                        if (string.Equals(_cfg.NotionDatabaseId, databaseId, StringComparison.Ordinal))
+                        {
+                            _cfg.NotionDatabaseId = string.Empty; TrySaveConfig();
+                        }
+                    }
+                    catch { }
                     // Ensure we have a valid DB (query may have been 404); refresh mapping proactively
                     try
                     {
