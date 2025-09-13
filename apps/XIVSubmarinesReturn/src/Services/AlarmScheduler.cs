@@ -127,9 +127,10 @@ var hadPrev = _prevMins.TryGetValue(idKey, out var prevMins);
                                 catch { }
 
                                 // discord (optional)
+                                var snapCopy = _current; // capture for closure
                                 _ = Task.Run(async () =>
                                 {
-                                    try { await _discord.NotifyAlarmAsync(it, lead).ConfigureAwait(false); } catch (Exception ex) { _log.Warning(ex, "Discord alarm task failed"); }
+                                    try { await _discord.NotifyAlarmAsync(it, lead, snapCopy).ConfigureAwait(false); } catch (Exception ex) { _log.Warning(ex, "Discord alarm task failed"); }
                                 });
                             }
                         }

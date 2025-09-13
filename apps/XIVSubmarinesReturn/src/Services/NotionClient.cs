@@ -14,7 +14,7 @@ namespace XIVSubmarinesReturn.Services
     public interface INotionClient
     {
         Task UpsertSnapshotAsync(SubmarineSnapshot snap, bool latestOnly, CancellationToken ct = default);
-        Task<bool> EnsureProvisionedAsync(CancellationToken ct = default);
+        Task<bool> EnsureProvisionedAsync(SubmarineSnapshot? snap = null, CancellationToken ct = default);
         Task<string> EnsureDatabasePropsAsync(CancellationToken ct = default);
     }
 
@@ -39,8 +39,9 @@ namespace XIVSubmarinesReturn.Services
                 if (!_cfg.NotionEnabled) { XsrDebug.Log(_cfg, "Notion: skip (disabled)"); return; }
                 if (string.IsNullOrWhiteSpace(_cfg.NotionToken)) { XsrDebug.Log(_cfg, "Notion: skip (no token)"); return; }
                 // Ensure DB is provisioned (auto-create if missing or properties incomplete)
-                try { await EnsureProvisionedAsync(ct).ConfigureAwait(false); } catch { }
-                if (string.IsNullOrWhiteSpace(_cfg.NotionDatabaseId)) { XsrDebug.Log(_cfg, "Notion: skip (no database id)"); return; }
+                string? dbId = null;
+                try { var ok = await EnsureProvisionedAsync(snap, ct).ConfigureAwait(false); if (ok) dbId = ResolveDbIdForSnapshot(snap); } catch { }
+                if (string.IsNullOrWhiteSpace(dbId)) { XsrDebug.Log(_cfg, "Notion: skip (no database id)"); return; }
                 var items = (snap.Items ?? new List<SubmarineRecord>()).ToList();
                 if (items.Count == 0) return;
                 if (latestOnly)
@@ -50,7 +51,7 @@ namespace XIVSubmarinesReturn.Services
                 }
                 foreach (var it in items)
                 {
-                    await UpsertOneAsync(snap, it, ct).ConfigureAwait(false);
+                    await UpsertOneAsync(snap, it, dbId!, ct).ConfigureAwait(false);
                 }
             }
             catch (Exception ex)
@@ -60,20 +61,35 @@ namespace XIVSubmarinesReturn.Services
             }
         }
 
-        public async Task<bool> EnsureProvisionedAsync(CancellationToken ct = default)
+        public async Task<bool> EnsureProvisionedAsync(SubmarineSnapshot? snap = null, CancellationToken ct = default)
         {
             try
             {
                 if (!_cfg.NotionEnabled) return false;
                 if (string.IsNullOrWhiteSpace(_cfg.NotionToken)) return false;
 
-                // If DB is set, verify it exists. If gone (404), clear and re-create.
+                // Check per-identity DB first
+                var key = GetIdentityKey(snap);
+                if (_cfg.NotionPerIdentityDatabase && !string.IsNullOrWhiteSpace(key))
+                {
+                    var id = ResolveDbIdForSnapshot(snap);
+                    if (!string.IsNullOrWhiteSpace(id))
+                    {
+                        var exists = await CheckDatabaseExistsAsync(id!, ct).ConfigureAwait(false);
+                        if (exists) { try { await EnsureDatabasePropsAndFixAsync(id!, ct).ConfigureAwait(false); } catch { } return true; }
+                        // invalid → remove mapping and fallthrough to create
+                        try { if (_cfg.NotionDatabaseByIdentity.ContainsKey(key)) _cfg.NotionDatabaseByIdentity.Remove(key); } catch { }
+                        TrySaveConfig();
+                    }
+                }
+
+                // If global DB is set, verify it exists. If gone (404), clear and re-create.
                 if (!string.IsNullOrWhiteSpace(_cfg.NotionDatabaseId))
                 {
                     var exists = await CheckDatabaseExistsAsync(_cfg.NotionDatabaseId!, ct).ConfigureAwait(false);
                     if (exists)
                     {
-                        try { await EnsureDatabasePropsAndFixAsync(ct).ConfigureAwait(false); } catch { }
+                        try { await EnsureDatabasePropsAndFixAsync(_cfg.NotionDatabaseId!, ct).ConfigureAwait(false); } catch { }
                         return true;
                     }
                     else
@@ -94,9 +110,14 @@ namespace XIVSubmarinesReturn.Services
                     pageId = await CreateWorkspacePageAsync("XSR Notifications", ct).ConfigureAwait(false);
                 }
                 if (string.IsNullOrWhiteSpace(pageId)) { XsrDebug.Log(_cfg, "Notion: page create failed"); return false; }
-                var dbId = await CreateDatabaseAsync(pageId!, "XSR Submarines", ct).ConfigureAwait(false);
+                var title = BuildDbTitle(snap);
+                var dbId = await CreateDatabaseAsync(pageId!, title, ct).ConfigureAwait(false);
                 if (string.IsNullOrWhiteSpace(dbId)) { XsrDebug.Log(_cfg, "Notion: database create failed"); return false; }
-                _cfg.NotionDatabaseId = dbId!;
+                if (_cfg.NotionPerIdentityDatabase && !string.IsNullOrWhiteSpace(key))
+                {
+                    try { _cfg.NotionDatabaseByIdentity[key] = dbId!; } catch { }
+                }
+                _cfg.NotionDatabaseId = dbId!; // for UI visibility
                 TrySaveConfig();
                 XsrDebug.Log(_cfg, $"Notion: database provisioned id={dbId}");
                 return true;
@@ -126,22 +147,21 @@ namespace XIVSubmarinesReturn.Services
             catch { return false; }
         }
 
-        private async Task UpsertOneAsync(SubmarineSnapshot snap, SubmarineRecord it, CancellationToken ct)
+        private async Task UpsertOneAsync(SubmarineSnapshot snap, SubmarineRecord it, string databaseId, CancellationToken ct)
         {
             try
             {
                 var token = _cfg.NotionToken;
-                var dbid = _cfg.NotionDatabaseId;
                 var extId = BuildStableId(snap, it);
 
-                var pageId = await TryFindPageIdByExtIdAsync(dbid, extId, ct).ConfigureAwait(false);
+                var pageId = await TryFindPageIdByExtIdAsync(databaseId, extId, ct).ConfigureAwait(false);
                 if (!string.IsNullOrEmpty(pageId))
                 {
                     await UpdatePageAsync(pageId!, snap, it, extId, ct).ConfigureAwait(false);
                 }
                 else
                 {
-                    await CreatePageAsync(dbid, snap, it, extId, ct).ConfigureAwait(false);
+                    await CreatePageAsync(databaseId, snap, it, extId, ct).ConfigureAwait(false);
                 }
             }
             catch (Exception ex)
@@ -180,7 +200,7 @@ namespace XIVSubmarinesReturn.Services
                         // Database might have been deleted; attempt re-provision once.
                         XsrDebug.Log(_cfg, "Notion query 404: database missing; attempting re-provision");
                         _cfg.NotionDatabaseId = string.Empty; TrySaveConfig();
-                        var ok = await EnsureProvisionedAsync(ct).ConfigureAwait(false);
+                        var ok = await EnsureProvisionedAsync(null, ct).ConfigureAwait(false);
                         if (ok && !string.IsNullOrWhiteSpace(_cfg.NotionDatabaseId))
                         {
                             // retry once with new DB
@@ -233,7 +253,7 @@ namespace XIVSubmarinesReturn.Services
                         if (!ok)
                         {
                             _cfg.NotionDatabaseId = string.Empty; TrySaveConfig();
-                            var prov = await EnsureProvisionedAsync(ct).ConfigureAwait(false);
+                            var prov = await EnsureProvisionedAsync(snap, ct).ConfigureAwait(false);
                             if (prov && !string.IsNullOrWhiteSpace(_cfg.NotionDatabaseId))
                             {
                                 var payload2 = new { parent = new { database_id = _cfg.NotionDatabaseId }, properties = BuildProperties(snap, it, extId) };
@@ -405,11 +425,14 @@ namespace XIVSubmarinesReturn.Services
             }
         }
 
-        private async Task EnsureDatabasePropsAndFixAsync(CancellationToken ct)
+        private async Task EnsureDatabasePropsAndFixAsync(string databaseId, CancellationToken ct)
         {
             try
             {
+                var prev = _cfg.NotionDatabaseId;
+                _cfg.NotionDatabaseId = databaseId;
                 var check = await EnsureDatabasePropsAsync(ct).ConfigureAwait(false);
+                _cfg.NotionDatabaseId = prev;
                 if (check.StartsWith("Notion: プロパティOK", StringComparison.Ordinal)) return;
 
                 // Parse missing from message and try to add
@@ -433,7 +456,7 @@ namespace XIVSubmarinesReturn.Services
                 }
                 if (toAdd.Count == 0) return;
 
-                var url = $"https://api.notion.com/v1/databases/{_cfg.NotionDatabaseId}";
+                var url = $"https://api.notion.com/v1/databases/{databaseId}";
                 var props = new Dictionary<string, object>(StringComparer.Ordinal);
                 foreach (var (name, type) in toAdd)
                 {
@@ -454,6 +477,47 @@ namespace XIVSubmarinesReturn.Services
                 _log.Warning(ex, "Notion fix props failed");
                 XsrDebug.Log(_cfg, "Notion fix props failed", ex);
             }
+        }
+
+        private static string GetIdentityKey(SubmarineSnapshot? snap)
+        {
+            try
+            {
+                var ch = snap?.Character?.Trim() ?? string.Empty;
+                var fc = snap?.FreeCompany?.Trim() ?? string.Empty;
+                if (!string.IsNullOrWhiteSpace(ch) && !string.IsNullOrWhiteSpace(fc)) return ch + "|" + fc;
+                if (!string.IsNullOrWhiteSpace(ch)) return ch;
+                return string.Empty;
+            }
+            catch { return string.Empty; }
+        }
+
+        private string? ResolveDbIdForSnapshot(SubmarineSnapshot? snap)
+        {
+            try
+            {
+                if (_cfg.NotionPerIdentityDatabase)
+                {
+                    var key = GetIdentityKey(snap);
+                    if (!string.IsNullOrWhiteSpace(key) && _cfg.NotionDatabaseByIdentity != null && _cfg.NotionDatabaseByIdentity.TryGetValue(key, out var id) && !string.IsNullOrWhiteSpace(id))
+                        return id;
+                }
+                return _cfg.NotionDatabaseId;
+            }
+            catch { return _cfg.NotionDatabaseId; }
+        }
+
+        private static string BuildDbTitle(SubmarineSnapshot? snap)
+        {
+            try
+            {
+                var ch = snap?.Character?.Trim();
+                var fc = snap?.FreeCompany?.Trim();
+                if (!string.IsNullOrWhiteSpace(ch) && !string.IsNullOrWhiteSpace(fc)) return $"XSR {ch} @ {fc}";
+                if (!string.IsNullOrWhiteSpace(ch)) return $"XSR {ch}";
+                return "XSR Submarines";
+            }
+            catch { return "XSR Submarines"; }
         }
 
         private string GuessPropType(string name)
@@ -576,8 +640,11 @@ namespace XIVSubmarinesReturn.Services
             if (it.Rank.HasValue)
                 props[rankProp] = new { number = (double?)it.Rank.Value };
 
-            if (!string.IsNullOrWhiteSpace(it.RouteKey))
-                props[routeProp] = new { rich_text = new[] { new { text = new { content = it.RouteKey } } } };
+            var routeText = string.Empty;
+            try { if (it.Extra != null && it.Extra.TryGetValue("RouteShort", out var rs) && !string.IsNullOrWhiteSpace(rs)) routeText = rs; } catch { }
+            if (string.IsNullOrWhiteSpace(routeText)) routeText = it.RouteKey ?? string.Empty;
+            if (!string.IsNullOrWhiteSpace(routeText))
+                props[routeProp] = new { rich_text = new[] { new { text = new { content = routeText } } } };
 
             if (it.EtaUnix.HasValue)
             {

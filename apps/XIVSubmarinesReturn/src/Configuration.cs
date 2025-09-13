@@ -135,6 +135,9 @@ public class Configuration : IPluginConfiguration
     public bool NotionEnabled { get; set; } = false;
     public string NotionToken { get; set; } = string.Empty;
     public string NotionDatabaseId { get; set; } = string.Empty;
+    // 複数キャラクター対応: Character/FC 単位のDBマップ（key="Character|FC" または "Character"）
+    public System.Collections.Generic.Dictionary<string, string> NotionDatabaseByIdentity { get; set; } = new();
+    public bool NotionPerIdentityDatabase { get; set; } = true;
     // 自動セットアップ用: 親ページID（URL→IDで設定可能）。空ならワークスペース直下を試行
     public string NotionParentPageId { get; set; } = string.Empty;
     public bool NotionLatestOnly { get; set; } = false;
