@@ -346,6 +346,16 @@ public sealed partial class Plugin
         }
         catch (Exception ex) { _uiStatus = $"Notion test failed: {ex.Message}"; }
     }
+    public void Ui_AutoSetupNotion()
+    {
+        try
+        {
+            if (_notion == null) { _uiStatus = "Notion client not ready"; return; }
+            var ok = _notion.EnsureProvisionedAsync().GetAwaiter().GetResult();
+            _uiStatus = ok ? ($"Notion 自動セットアップ完了: DB={Config.NotionDatabaseId}") : "自動セットアップ失敗";
+        }
+        catch (Exception ex) { _uiStatus = $"自動セットアップ失敗: {ex.Message}"; }
+    }
     private bool _revealNotionToken;
 
     private void InitUI()

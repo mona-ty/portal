@@ -11,6 +11,7 @@ namespace XIVSubmarinesReturn.UI
     {
         private static bool _revealDiscord;
         private static bool _revealNotion;
+        private static string _dbUrlInput = string.Empty;
 
         internal static void Draw(Plugin p)
         {
@@ -86,6 +87,24 @@ namespace XIVSubmarinesReturn.UI
                 if (Widgets.MaskedInput("Integration Token", ref token, 256, ref _revealNotion)) { p.Config.NotionToken = token; p.SaveConfig(); }
                 var db = p.Config.NotionDatabaseId ?? string.Empty;
                 if (ImGui.InputText("Database ID", ref db, 128)) { p.Config.NotionDatabaseId = db; p.SaveConfig(); }
+
+                // Helper: DB URL -> ID 抽出
+                ImGui.PushItemWidth(360);
+                ImGui.InputText("DB URL (貼付)", ref _dbUrlInput, 512);
+                ImGui.PopItemWidth();
+                ImGui.SameLine();
+                if (ImGui.SmallButton("URL→ID"))
+                {
+                    try
+                    {
+                        var id = XIVSubmarinesReturn.Services.NotionClient.TryExtractIdFromUrlOrId(_dbUrlInput);
+                        if (!string.IsNullOrWhiteSpace(id)) { p.Config.NotionDatabaseId = id!; p.SaveConfig(); }
+                    }
+                    catch { }
+                }
+
+                // Auto setup
+                if (ImGui.SmallButton("自動セットアップ")) { p.Ui_AutoSetupNotion(); }
                 var nLatest = p.Config.NotionLatestOnly;
                 if (ImGui.Checkbox("最早のみ", ref nLatest)) { p.Config.NotionLatestOnly = nLatest; p.SaveConfig(); }
 
