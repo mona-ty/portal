@@ -135,6 +135,11 @@ public class Configuration : IPluginConfiguration
     public bool NotionEnabled { get; set; } = false;
     public string NotionToken { get; set; } = string.Empty;
     public string NotionDatabaseId { get; set; } = string.Empty;
+    // 複数キャラクター対応: Character/FC 単位のDBマップ（key="Character|FC" または "Character"）
+    public System.Collections.Generic.Dictionary<string, string> NotionDatabaseByIdentity { get; set; } = new();
+    public bool NotionPerIdentityDatabase { get; set; } = true;
+    // 自動セットアップ用: 親ページID（URL→IDで設定可能）。空ならワークスペース直下を試行
+    public string NotionParentPageId { get; set; } = string.Empty;
     public bool NotionLatestOnly { get; set; } = false;
     public NotionKeyMode NotionKeyMode { get; set; } = NotionKeyMode.PerSlot;
     // Property names mapping (must exist in the target database)
@@ -144,11 +149,7 @@ public class Configuration : IPluginConfiguration
     public string NotionPropRoute { get; set; } = "Route";     // rich_text
     public string NotionPropRank { get; set; } = "Rank";       // number
     public string NotionPropExtId { get; set; } = "ExtId";     // rich_text (for upsert)
-    // v2 additions
-    public string NotionPropRemaining { get; set; } = "Remaining";   // rich_text
-    public string NotionPropWorld { get; set; } = "World";           // rich_text
-    public string NotionPropCharacter { get; set; } = "Character";   // rich_text
-    public string NotionPropFC { get; set; } = "FC";                 // rich_text
+    // 余分な付加情報（World/Character/FC/Remaining）は廃止（DB簡素化）
 
     public void Save(IDalamudPluginInterface pi)
     {

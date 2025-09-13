@@ -124,7 +124,7 @@ public sealed partial class Plugin : IDalamudPlugin
             catch { }
 
             _discord = new DiscordNotifier(Config, _log, http);
-            _notion = new NotionClient(Config, _log, http);
+            _notion = new NotionClient(Config, _log, http, _pi);
             // Sector Resolver (Excel + Alias JSON)
             try
             {

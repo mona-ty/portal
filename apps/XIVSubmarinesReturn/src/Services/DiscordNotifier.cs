@@ -11,7 +11,7 @@ namespace XIVSubmarinesReturn.Services
     public interface IDiscordNotifier
     {
         Task NotifySnapshotAsync(SubmarineSnapshot snap, bool latestOnly, CancellationToken ct = default);
-        Task NotifyAlarmAsync(SubmarineRecord rec, int leadMinutes, CancellationToken ct = default);
+        Task NotifyAlarmAsync(SubmarineRecord rec, int leadMinutes, SubmarineSnapshot? snap = null, CancellationToken ct = default);
     }
 
     public sealed class DiscordNotifier : IDiscordNotifier
@@ -40,19 +40,20 @@ namespace XIVSubmarinesReturn.Services
                     ? new[] { GetNearest(snap) ?? snap.Items[0] }
                     : snap.Items.ToArray();
 
+                var header = BuildIdentityHeader(snap);
                 if (_cfg.DiscordUseEmbeds)
                 {
                     var fields = items.Take(25).Select(it => new
                     {
                         name = (it.Name ?? string.Empty),
-                        value = BuildSnapshotLine2(it),
+                        value = BuildSnapshotLine2(it, header),
                         inline = false
                     }).ToArray();
                     var payload = new
                     {
                         embeds = new[]
                         {
-                            new { title = "Submarines", description = latestOnly ? "Earliest only (ETA min)" : "All", color = 0x0066CC, fields }
+                            new { title = string.IsNullOrWhiteSpace(header) ? "Submarines" : header, description = latestOnly ? "Earliest only (ETA min)" : "All", color = 0x0066CC, fields }
                         }
                     };
                     await PostJsonAsync(url, payload, ct).ConfigureAwait(false);
@@ -61,7 +62,7 @@ namespace XIVSubmarinesReturn.Services
                 {
                     foreach (var it in items)
                     {
-                        var msg = BuildSnapshotLine2(it);
+                        var msg = BuildSnapshotLine2(it, header);
                         await PostAsync(url, msg, ct).ConfigureAwait(false);
                     }
                 }
@@ -73,7 +74,7 @@ namespace XIVSubmarinesReturn.Services
             }
         }
 
-                public async Task NotifyAlarmAsync(SubmarineRecord rec, int leadMinutes, CancellationToken ct = default)
+                public async Task NotifyAlarmAsync(SubmarineRecord rec, int leadMinutes, SubmarineSnapshot? snap = null, CancellationToken ct = default)
         {
             try
             {
@@ -92,7 +93,9 @@ namespace XIVSubmarinesReturn.Services
                 catch { etaFull = "?"; }
 
                 var routeText = (rec.Extra != null && rec.Extra.TryGetValue("RouteShort", out var r)) ? r : rec.RouteKey;
-                var msg = $"[Sub Alarm] {rec.Name} ETA {etaFull} (残 {leadMinutes}分) {routeText}";
+                var header = BuildIdentityHeader(snap);
+                var prefix = string.IsNullOrWhiteSpace(header) ? string.Empty : ($"[{header}] ");
+                var msg = $"{prefix}[Sub Alarm] {rec.Name} ETA {etaFull} (残 {leadMinutes}分) {routeText}";
                 await PostAsync(url, msg, ct).ConfigureAwait(false);
             }
             catch (Exception ex)
@@ -113,8 +116,21 @@ namespace XIVSubmarinesReturn.Services
         }
 
         // Extended line builder that prefers full local date-time for ETA
-                        // Extended line builder that prefers full local date-time for ETA
-        private static string BuildSnapshotLine2(SubmarineRecord it)
+        private static string BuildIdentityHeader(SubmarineSnapshot? snap)
+        {
+            try
+            {
+                var ch = snap?.Character?.Trim() ?? string.Empty;
+                var fc = snap?.FreeCompany?.Trim() ?? string.Empty;
+                if (!string.IsNullOrWhiteSpace(ch) && !string.IsNullOrWhiteSpace(fc)) return $"{ch} / {fc}";
+                if (!string.IsNullOrWhiteSpace(ch)) return ch;
+                return string.Empty;
+            }
+            catch { return string.Empty; }
+        }
+
+        // Extended line builder that prefers full local date-time for ETA
+        private static string BuildSnapshotLine2(SubmarineRecord it, string? identityHeader)
         {
             string eta = string.Empty;
             try
@@ -130,7 +146,8 @@ namespace XIVSubmarinesReturn.Services
 
             var rem = it.Extra != null && it.Extra.TryGetValue("RemainingText", out var rm) ? rm : string.Empty;
             var rt = it.Extra != null && it.Extra.TryGetValue("RouteShort", out var r) ? r : it.RouteKey;
-            return  $"[Sub] {eta} (残 {rem}) {rt}".Trim(); 
+            var prefix = string.IsNullOrWhiteSpace(identityHeader) ? string.Empty : ($"[{identityHeader}] ");
+            return  $"{prefix}[Sub] {eta} (残 {rem}) {rt}".Trim(); 
         }private static string BuildSnapshotLine(SubmarineRecord it)
         {
             var eta = it.Extra != null && it.Extra.TryGetValue("EtaLocal", out var t) ? t : string.Empty;
@@ -231,5 +248,3 @@ namespace XIVSubmarinesReturn.Services
         }
     }
 }
-
-

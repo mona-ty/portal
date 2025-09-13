@@ -11,6 +11,8 @@ namespace XIVSubmarinesReturn.UI
     {
         private static bool _revealDiscord;
         private static bool _revealNotion;
+        private static string _dbUrlInput = string.Empty;
+        private static string _parentPageUrl = string.Empty;
 
         internal static void Draw(Plugin p)
         {
@@ -86,6 +88,39 @@ namespace XIVSubmarinesReturn.UI
                 if (Widgets.MaskedInput("Integration Token", ref token, 256, ref _revealNotion)) { p.Config.NotionToken = token; p.SaveConfig(); }
                 var db = p.Config.NotionDatabaseId ?? string.Empty;
                 if (ImGui.InputText("Database ID", ref db, 128)) { p.Config.NotionDatabaseId = db; p.SaveConfig(); }
+
+                // Helper: DB URL -> ID 抽出
+                ImGui.PushItemWidth(360);
+                ImGui.InputText("DB URL (貼付)", ref _dbUrlInput, 512);
+                ImGui.PopItemWidth();
+                ImGui.SameLine();
+                if (ImGui.SmallButton("URL→ID"))
+                {
+                    try
+                    {
+                        var id = XIVSubmarinesReturn.Services.NotionClient.TryExtractIdFromUrlOrId(_dbUrlInput);
+                        if (!string.IsNullOrWhiteSpace(id)) { p.Config.NotionDatabaseId = id!; p.SaveConfig(); }
+                    }
+                    catch { }
+                }
+
+                // Optional: 親ページURL → 親ページID（自動セットアップ時の作成先指定）
+                ImGui.PushItemWidth(360);
+                ImGui.InputText("親ページURL(貼付)", ref _parentPageUrl, 512);
+                ImGui.PopItemWidth();
+                ImGui.SameLine();
+                if (ImGui.SmallButton("URL→親ID"))
+                {
+                    try
+                    {
+                        var id = XIVSubmarinesReturn.Services.NotionClient.TryExtractIdFromUrlOrId(_parentPageUrl);
+                        if (!string.IsNullOrWhiteSpace(id)) { p.Config.NotionParentPageId = id!; p.SaveConfig(); }
+                    }
+                    catch { }
+                }
+
+                // Auto setup
+                if (ImGui.SmallButton("自動セットアップ")) { p.Ui_AutoSetupNotion(); }
                 var nLatest = p.Config.NotionLatestOnly;
                 if (ImGui.Checkbox("最早のみ", ref nLatest)) { p.Config.NotionLatestOnly = nLatest; p.SaveConfig(); }
 
@@ -95,7 +130,7 @@ namespace XIVSubmarinesReturn.UI
                 ImGui.SameLine(); if (ImGui.RadioButton("Slot+Route", mode == 1)) { p.Config.NotionKeyMode = NotionKeyMode.PerSlotRoute; p.SaveConfig(); mode = 1; }
                 ImGui.SameLine(); if (ImGui.RadioButton("Voyage", mode == 2)) { p.Config.NotionKeyMode = NotionKeyMode.PerVoyage; p.SaveConfig(); mode = 2; }
 
-                // プロパティ名（再掲）
+                // プロパティ名（必要最小限）
                 var pn = p.Config.NotionPropName ?? "Name";
                 if (ImGui.InputText("Prop: Name (title)", ref pn, 64)) { p.Config.NotionPropName = pn; p.SaveConfig(); }
                 var ps = p.Config.NotionPropSlot ?? "Slot";
@@ -108,14 +143,6 @@ namespace XIVSubmarinesReturn.UI
                 if (ImGui.InputText("Prop: Rank (number)", ref prk, 64)) { p.Config.NotionPropRank = prk; p.SaveConfig(); }
                 var px = p.Config.NotionPropExtId ?? "ExtId";
                 if (ImGui.InputText("Prop: ExtId (rich_text)", ref px, 64)) { p.Config.NotionPropExtId = px; p.SaveConfig(); }
-                var prem = p.Config.NotionPropRemaining ?? "Remaining";
-                if (ImGui.InputText("Prop: Remaining (rich_text)", ref prem, 64)) { p.Config.NotionPropRemaining = prem; p.SaveConfig(); }
-                var pw = p.Config.NotionPropWorld ?? "World";
-                if (ImGui.InputText("Prop: World (rich_text)", ref pw, 64)) { p.Config.NotionPropWorld = pw; p.SaveConfig(); }
-                var pc = p.Config.NotionPropCharacter ?? "Character";
-                if (ImGui.InputText("Prop: Character (rich_text)", ref pc, 64)) { p.Config.NotionPropCharacter = pc; p.SaveConfig(); }
-                var pfc = p.Config.NotionPropFC ?? "FC";
-                if (ImGui.InputText("Prop: FC (rich_text)", ref pfc, 64)) { p.Config.NotionPropFC = pfc; p.SaveConfig(); }
 
                 if (ImGui.SmallButton("検証")) { p.Ui_ValidateNotion(); }
                 ImGui.SameLine(); if (ImGui.SmallButton("テスト送信")) { p.Ui_TestNotion(); }

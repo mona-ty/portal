@@ -33,6 +33,8 @@ public sealed partial class Plugin
     private bool _showLegacyUi = false;
     private int _mogshipLastMaps;
     private int _mogshipLastAliases;
+    private string _uiNotionDbUrl = string.Empty;
+    private bool _uiNotionAutoSetupRunning = false;
     public void Ui_ReloadSnapshot() { try { _uiLastReadUtc = DateTime.MinValue; _uiStatus = "JSON再読込 実行"; } catch { } }
     public void Ui_ImportFromMogship() { try { TryImportFromMogship(); } catch (Exception ex) { _uiStatus = $"Mogship取込失敗: {ex.Message}"; } }
     public void Ui_OpenBridgeFolder() { try { TryOpenFolder(System.IO.Path.GetDirectoryName(BridgeWriter.CurrentFilePath())); } catch { } }
@@ -344,6 +346,16 @@ public sealed partial class Plugin
         }
         catch (Exception ex) { _uiStatus = $"Notion test failed: {ex.Message}"; }
     }
+    public void Ui_AutoSetupNotion()
+    {
+        try
+        {
+            if (_notion == null) { _uiStatus = "Notion client not ready"; return; }
+            var ok = _notion.EnsureProvisionedAsync().GetAwaiter().GetResult();
+            _uiStatus = ok ? ($"Notion 自動セットアップ完了: DB={Config.NotionDatabaseId}") : "自動セットアップ失敗";
+        }
+        catch (Exception ex) { _uiStatus = $"自動セットアップ失敗: {ex.Message}"; }
+    }
     private bool _revealNotionToken;
 
     private void InitUI()
@@ -570,6 +582,43 @@ public sealed partial class Plugin
                         if (Widgets.MaskedInput("Integration Token", ref tok, 256, ref _revealNotionToken)) { Config.NotionToken = tok; SaveConfig(); }
                         var db = Config.NotionDatabaseId ?? string.Empty;
                         if (ImGui.InputText("Database ID", ref db, 256)) { Config.NotionDatabaseId = db; SaveConfig(); }
+
+                        // Existing DB URL helper
+                        ImGui.PushItemWidth(380);
+                        ImGui.InputText("DB URL (貼付)", ref _uiNotionDbUrl, 512);
+                        ImGui.PopItemWidth();
+                        ImGui.SameLine();
+                        if (ImGui.Button("URL→ID"))
+                        {
+                            try
+                            {
+                                var id = Services.NotionClient.TryExtractIdFromUrlOrId(_uiNotionDbUrl);
+                                if (!string.IsNullOrWhiteSpace(id))
+                                {
+                                    Config.NotionDatabaseId = id!; SaveConfig();
+                                    _uiStatus = $"Notion DB ID 設定: {id}";
+                                }
+                                else _uiStatus = "URLからID抽出に失敗しました";
+                            }
+                            catch (System.Exception ex) { _uiStatus = $"URL→ID 失敗: {ex.Message}"; }
+                        }
+
+                        // Auto-setup
+                        if (ImGui.Button(_uiNotionAutoSetupRunning ? "自動セットアップ中..." : "自動セットアップ"))
+                        {
+                            try
+                            {
+                                _uiNotionAutoSetupRunning = true;
+                                if (_notion != null)
+                                {
+                                    var ok = _notion.EnsureProvisionedAsync().GetAwaiter().GetResult();
+                                    _uiStatus = ok ? ($"Notion 自動セットアップ完了: DB={Config.NotionDatabaseId}") : "自動セットアップ失敗";
+                                }
+                                else _uiStatus = "Notion client not ready";
+                            }
+                            catch (System.Exception ex) { _uiStatus = $"自動セットアップ失敗: {ex.Message}"; }
+                            finally { _uiNotionAutoSetupRunning = false; }
+                        }
                         bool nLatest = Config.NotionLatestOnly;
                         if (ImGui.Checkbox("最早(ETA最小)のみ", ref nLatest)) { Config.NotionLatestOnly = nLatest; SaveConfig(); }
 
@@ -595,14 +644,7 @@ public sealed partial class Plugin
                         if (ImGui.InputText("Prop: Rank (number)", ref prk, 64)) { Config.NotionPropRank = prk; SaveConfig(); }
                         var px = Config.NotionPropExtId ?? "ExtId";
                         if (ImGui.InputText("Prop: ExtId (rich_text)", ref px, 64)) { Config.NotionPropExtId = px; SaveConfig(); }
-                        var prem = Config.NotionPropRemaining ?? "Remaining";
-                        if (ImGui.InputText("Prop: Remaining (rich_text)", ref prem, 64)) { Config.NotionPropRemaining = prem; SaveConfig(); }
-                        var pw = Config.NotionPropWorld ?? "World";
-                        if (ImGui.InputText("Prop: World (rich_text)", ref pw, 64)) { Config.NotionPropWorld = pw; SaveConfig(); }
-                        var pc = Config.NotionPropCharacter ?? "Character";
-                        if (ImGui.InputText("Prop: Character (rich_text)", ref pc, 64)) { Config.NotionPropCharacter = pc; SaveConfig(); }
-                        var pfc = Config.NotionPropFC ?? "FC";
-                        if (ImGui.InputText("Prop: FC (rich_text)", ref pfc, 64)) { Config.NotionPropFC = pfc; SaveConfig(); }
+                        // 付加情報（Remaining/World/Character/FC）は廃止
 
                         if (ImGui.Button("プロパティ検証"))
                         {
@@ -622,6 +664,7 @@ public sealed partial class Plugin
                         {
                             try
                             {
+                                try { if (_notion != null) _notion.EnsureProvisionedAsync().GetAwaiter().GetResult(); } catch { }
                                 var snap = _uiSnapshot ?? new SubmarineSnapshot
                                 {
                                     PluginVersion = typeof(Plugin).Assembly.GetName().Version?.ToString(3) ?? "0.0.0",
@@ -1022,14 +1065,7 @@ public sealed partial class Plugin
                 if (ImGui.InputText("Prop: Rank (number)", ref prk, 64)) { Config.NotionPropRank = prk; SaveConfig(); }
                 var px = Config.NotionPropExtId ?? "ExtId";
                 if (ImGui.InputText("Prop: ExtId (rich_text)", ref px, 64)) { Config.NotionPropExtId = px; SaveConfig(); }
-                var prem = Config.NotionPropRemaining ?? "Remaining";
-                if (ImGui.InputText("Prop: Remaining (rich_text)", ref prem, 64)) { Config.NotionPropRemaining = prem; SaveConfig(); }
-                var pw = Config.NotionPropWorld ?? "World";
-                if (ImGui.InputText("Prop: World (rich_text)", ref pw, 64)) { Config.NotionPropWorld = pw; SaveConfig(); }
-                var pc = Config.NotionPropCharacter ?? "Character";
-                if (ImGui.InputText("Prop: Character (rich_text)", ref pc, 64)) { Config.NotionPropCharacter = pc; SaveConfig(); }
-                var pfc = Config.NotionPropFC ?? "FC";
-                if (ImGui.InputText("Prop: FC (rich_text)", ref pfc, 64)) { Config.NotionPropFC = pfc; SaveConfig(); }
+                // 付加情報（Remaining/World/Character/FC）は廃止
 
                 if (ImGui.Button("Validate properties"))
                 {
