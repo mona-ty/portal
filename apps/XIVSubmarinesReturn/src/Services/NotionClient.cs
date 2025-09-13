@@ -74,8 +74,16 @@ namespace XIVSubmarinesReturn.Services
                     return true;
                 }
 
-                // Create a workspace page, then a database under it
-                var pageId = await CreateWorkspacePageAsync("XSR Notifications", ct).ConfigureAwait(false);
+                // Determine parent page: prefer configured parent; else create a workspace page
+                string? pageId = null;
+                if (!string.IsNullOrWhiteSpace(_cfg.NotionParentPageId))
+                {
+                    pageId = _cfg.NotionParentPageId;
+                }
+                else
+                {
+                    pageId = await CreateWorkspacePageAsync("XSR Notifications", ct).ConfigureAwait(false);
+                }
                 if (string.IsNullOrWhiteSpace(pageId)) { XsrDebug.Log(_cfg, "Notion: page create failed"); return false; }
                 var dbId = await CreateDatabaseAsync(pageId!, "XSR Submarines", ct).ConfigureAwait(false);
                 if (string.IsNullOrWhiteSpace(dbId)) { XsrDebug.Log(_cfg, "Notion: database create failed"); return false; }

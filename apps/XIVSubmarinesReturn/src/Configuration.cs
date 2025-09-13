@@ -135,6 +135,8 @@ public class Configuration : IPluginConfiguration
     public bool NotionEnabled { get; set; } = false;
     public string NotionToken { get; set; } = string.Empty;
     public string NotionDatabaseId { get; set; } = string.Empty;
+    // 自動セットアップ用: 親ページID（URL→IDで設定可能）。空ならワークスペース直下を試行
+    public string NotionParentPageId { get; set; } = string.Empty;
     public bool NotionLatestOnly { get; set; } = false;
     public NotionKeyMode NotionKeyMode { get; set; } = NotionKeyMode.PerSlot;
     // Property names mapping (must exist in the target database)

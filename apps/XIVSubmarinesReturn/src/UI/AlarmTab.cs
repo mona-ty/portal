@@ -12,6 +12,7 @@ namespace XIVSubmarinesReturn.UI
         private static bool _revealDiscord;
         private static bool _revealNotion;
         private static string _dbUrlInput = string.Empty;
+        private static string _parentPageUrl = string.Empty;
 
         internal static void Draw(Plugin p)
         {
@@ -99,6 +100,21 @@ namespace XIVSubmarinesReturn.UI
                     {
                         var id = XIVSubmarinesReturn.Services.NotionClient.TryExtractIdFromUrlOrId(_dbUrlInput);
                         if (!string.IsNullOrWhiteSpace(id)) { p.Config.NotionDatabaseId = id!; p.SaveConfig(); }
+                    }
+                    catch { }
+                }
+
+                // Optional: 親ページURL → 親ページID（自動セットアップ時の作成先指定）
+                ImGui.PushItemWidth(360);
+                ImGui.InputText("親ページURL(貼付)", ref _parentPageUrl, 512);
+                ImGui.PopItemWidth();
+                ImGui.SameLine();
+                if (ImGui.SmallButton("URL→親ID"))
+                {
+                    try
+                    {
+                        var id = XIVSubmarinesReturn.Services.NotionClient.TryExtractIdFromUrlOrId(_parentPageUrl);
+                        if (!string.IsNullOrWhiteSpace(id)) { p.Config.NotionParentPageId = id!; p.SaveConfig(); }
                     }
                     catch { }
                 }
