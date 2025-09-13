@@ -261,6 +261,18 @@ namespace XIVSubmarinesReturn.Services
                 // If failed due to invalid DB (404), try re-provision once
                 try
                 {
+                    // Purge stale mapping (per-identity) that points to this databaseId
+                    try
+                    {
+                        if (_cfg.NotionPerIdentityDatabase && _cfg.NotionDatabaseByIdentity != null && _cfg.NotionDatabaseByIdentity.Count > 0)
+                        {
+                            var staleKeys = _cfg.NotionDatabaseByIdentity.Where(kv => string.Equals(kv.Value, databaseId, StringComparison.Ordinal)).Select(kv => kv.Key).ToList();
+                            foreach (var k in staleKeys) _cfg.NotionDatabaseByIdentity.Remove(k);
+                            if (staleKeys.Count > 0) TrySaveConfig();
+                        }
+                    }
+                    catch { }
+
                     if (!string.IsNullOrWhiteSpace(_cfg.NotionDatabaseId))
                     {
                         var ok = await CheckDatabaseExistsAsync(_cfg.NotionDatabaseId!, ct).ConfigureAwait(false);
