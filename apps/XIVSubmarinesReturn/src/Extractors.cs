@@ -189,6 +189,26 @@ namespace XIVSubmarinesReturn
                     continue;
                 }
 
+                // Unlabeled route chain like "M > R > O > J > Z" or "P15 > P10 > P3"
+                try
+                {
+                    var mChain = Regex.Match(s, @"^\s*(?<route>(?:[A-Za-z]|P\d+)(?:\s*[>＞]\s*(?:[A-Za-z]|P\d+)){2,})\s*$");
+                    if (mChain.Success)
+                    {
+                        var val = mChain.Groups["route"].Value;
+                        // normalize fullwidth chevron to '>' and remove redundant spaces
+                        val = val.Replace('＞', '>');
+                        val = string.Join('>', val.Split('>').Select(t => t.Trim()).Where(t => t.Length > 0));
+                        if (!string.IsNullOrEmpty(current) && byName.TryGetValue(current, out var rec2) && string.IsNullOrEmpty(rec2.RouteKey))
+                        {
+                            rec2.RouteKey = val;
+                            trace.Add($"route* <- '{s}' => {rec2.Name}:{val}");
+                            continue;
+                        }
+                    }
+                }
+                catch { }
+
                 // JPルート（先行検出）
                 try
                 {
@@ -243,6 +263,5 @@ namespace XIVSubmarinesReturn
         }
     }
 }
-
 
 

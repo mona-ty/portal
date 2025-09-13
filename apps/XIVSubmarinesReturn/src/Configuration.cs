@@ -52,6 +52,37 @@ public class Configuration : IPluginConfiguration
     // UIが取れない時にメモリ直読でのフォールバックを試す
     public bool UseMemoryFallback { get; set; } = true;
 
+    // メモリのみで取得（UIからの追補を無効化）
+    public bool MemoryOnlyMode { get; set; } = true;
+    // 構造体内スキャンで“計画航路”の復元を試みる
+    public bool MemoryRouteScanEnabled { get; set; } = true;
+    // スキャンで採用する最小トークン数（3 以上）
+    public int MemoryRouteMinCount { get; set; } = 3;
+    // スキャンで許容する最大トークン数（通常 5）
+    public int MemoryRouteMaxCount { get; set; } = 5;
+    // スキャン範囲（CurrentExplorationPoints 近傍の±バイト数）。0 で全域
+    public int MemoryRouteScanWindowBytes { get; set; } = 0x120;
+
+    // 取得ゲート（無駄スキャン抑止）
+    public bool EnableTerritoryGate { get; set; } = true;
+    public bool EnableAddonGate { get; set; } = true;
+
+    // 採用ロジック（降格防止）
+    public bool AdoptPreferLonger { get; set; } = true;
+    public bool AdoptAllowDowngrade { get; set; } = false; // Full保持中は基本降格しない
+    public int AdoptTtlHours { get; set; } = 12; // TTL=12h
+    public bool AdoptCachePersist { get; set; } = true; // プロファイルに永続
+
+    // ArrayData 優先（RequestedUpdate監視時の直読）
+    public bool PreferArrayDataFirst { get; set; } = true;
+
+    // スキャナ拡張トグル
+    public bool MemoryRouteZeroTerminated { get; set; } = true; // 0終端前提
+    public bool MemoryScanPhaseEnabled { get; set; } = true; // 位相拡張を許可
+
+    // AddonLifecycle 連動（イベントドリブン）
+    public bool EnableAddonLifecycleCapture { get; set; } = true;
+
     // スロット番号(1..4)に対する実艦名の学習結果を保存
     public string[] SlotAliases { get; set; } = new string[4];
 
@@ -87,6 +118,8 @@ public class Configuration : IPluginConfiguration
     public string DiscordWebhookUrl { get; set; } = string.Empty;
     public bool DiscordLatestOnly { get; set; } = false;
     public bool DiscordUseEmbeds { get; set; } = true;
+    // Snapshot 通知の最小間隔（分）。0で常に許可。
+    public int DiscordMinIntervalMinutes { get; set; } = 10;
 
     // In-game alarm lead minutes
     public bool GameAlarmEnabled { get; set; } = true;

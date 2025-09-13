@@ -30,32 +30,32 @@
   <!-- Dalamud local references (set via Local.props: DalamudLibPath) -->
   <ItemGroup Condition=" '$(DalamudLibPath)' != '' ">
     <Reference Include="Dalamud">
-      <HintPath>$(DalamudLibPath)\Dalamud.dll</HintPath>
+      <HintPath>$(DalamudLibPath)/Dalamud.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="Dalamud.Bindings.ImGui">
-      <HintPath>$(DalamudLibPath)\Dalamud.Bindings.ImGui.dll</HintPath>
+      <HintPath>$(DalamudLibPath)/Dalamud.Bindings.ImGui.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="FFXIVClientStructs">
-      <HintPath>$(DalamudLibPath)\FFXIVClientStructs.dll</HintPath>
+      <HintPath>$(DalamudLibPath)/FFXIVClientStructs.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="InteropGenerator.Runtime">
-      <HintPath>$(DalamudLibPath)\InteropGenerator.Runtime.dll</HintPath>
+      <HintPath>$(DalamudLibPath)/InteropGenerator.Runtime.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="Lumina">
-      <HintPath>$(DalamudLibPath)\Lumina.dll</HintPath>
+      <HintPath>$(DalamudLibPath)/Lumina.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="Lumina.Excel">
-      <HintPath>$(DalamudLibPath)\Lumina.Excel.dll</HintPath>
+      <HintPath>$(DalamudLibPath)/Lumina.Excel.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <!-- ImGui.NET.dll は環境により同梱されないため、直接参照を外す（Bindings 側を利用） -->
     <Reference Include="ImGuiScene">
-      <HintPath>$(DalamudLibPath)\ImGuiScene.dll</HintPath>
+      <HintPath>$(DalamudLibPath)/ImGuiScene.dll</HintPath>
       <Private>false</Private>
     </Reference>
   </ItemGroup>

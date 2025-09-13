@@ -20,7 +20,8 @@ namespace XIVSubmarinesReturn.UI
             // ゲーム内アラーム（縦並び）
             using (Widgets.Card("card_game_alarm", new Vector2(0, 0)))
             {
-                Widgets.SectionHeader("ゲーム内アラーム");
+                var header = new Vector4(0.88f, 0.88f, 0.92f, 0.55f);
+                Widgets.SectionHeaderBar("ゲーム内アラーム", header);
                 var enable = p.Config.GameAlarmEnabled;
                 Widgets.StatusPill(enable, "有効", "無効"); ImGui.SameLine();
                 if (ImGui.Checkbox("有効##game", ref enable)) { p.Config.GameAlarmEnabled = enable; p.SaveConfig(); }
@@ -51,16 +52,13 @@ namespace XIVSubmarinesReturn.UI
                 if (ImGui.SmallButton("テスト通知")) { p.Ui_TestGameAlarm(); }
             }
 
-            // 外部通知（Discord / Notion）
-            using (Widgets.Card("card_external", new Vector2(0, 0)))
-            {
-                Widgets.SectionHeader("外部通知");
-            }
+            // 外部通知カードは削除（Discord / Notion を個別表示）
 
             // Discord（縦並び）
             using (Widgets.Card("card_discord", new Vector2(0, 0)))
             {
-                Widgets.SectionHeader("Discord");
+                var header = new Vector4(0.88f, 0.88f, 0.92f, 0.55f);
+                Widgets.SectionHeaderBar("Discord", header);
                 var enabled = p.Config.DiscordEnabled;
                 Widgets.StatusPill(enabled, "有効", "無効"); ImGui.SameLine();
                 if (ImGui.Checkbox("有効##discord", ref enabled)) { p.Config.DiscordEnabled = enabled; p.SaveConfig(); }
@@ -71,13 +69,16 @@ namespace XIVSubmarinesReturn.UI
                 ImGui.SameLine();
                 var embeds = p.Config.DiscordUseEmbeds;
                 if (ImGui.Checkbox("埋め込み", ref embeds)) { p.Config.DiscordUseEmbeds = embeds; p.SaveConfig(); }
+                int minIv = p.Config.DiscordMinIntervalMinutes;
+                if (ImGui.InputInt("通知の最小間隔(分)", ref minIv)) { p.Config.DiscordMinIntervalMinutes = Math.Clamp(minIv, 0, 1440); p.SaveConfig(); }
                 if (ImGui.SmallButton("テスト送信")) { p.Ui_TestDiscord(); }
             }
 
             // Notion（縦並び・詳細設定を再掲）
             using (Widgets.Card("card_notion", new Vector2(0, 0)))
             {
-                Widgets.SectionHeader("Notion");
+                var header = new Vector4(0.88f, 0.88f, 0.92f, 0.55f);
+                Widgets.SectionHeaderBar("Notion", header);
                 var nEnable = p.Config.NotionEnabled;
                 Widgets.StatusPill(nEnable, "有効", "無効"); ImGui.SameLine();
                 if (ImGui.Checkbox("有効##notion", ref nEnable)) { p.Config.NotionEnabled = nEnable; p.SaveConfig(); }

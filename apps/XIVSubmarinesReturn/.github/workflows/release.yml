@@ -41,17 +41,41 @@ jobs:
       - name: Build (Release x64 + package)
         run: |
           $ver = "${{ github.ref_name }}" -replace '^v',''
-          dotnet build ./XIVSubmarinesReturn.csproj -c Release -p:Platform=x64 -p:MakeZip=true -p:Version=$ver -p:AssemblyVersion=$ver -p:FileVersion=$ver --nologo
+          dotnet build ./XIVSubmarinesReturn.csproj -c Release -p:Platform=x64 -p:SkipPack=false -p:MakeZip=true -p:Version=$ver -p:AssemblyVersion=$ver -p:FileVersion=$ver --nologo
           echo "::group::Locate artifacts"
-          dir .\bin\Release\net9.0-windows /s
+          Get-ChildItem -Path bin -Recurse
           echo "::endgroup::"
         working-directory: ${{ github.workspace }}
+      - name: Ensure latest.zip exists (fallback)
+        shell: pwsh
+        run: |
+          $zip = Get-ChildItem -Recurse -Filter latest.zip | Select-Object -First 1
+          if ($zip) { Write-Host "latest.zip found at $($zip.FullName)"; exit 0 }
+          Write-Host "latest.zip not found — creating fallback archive"
+          $dll = Get-ChildItem -Recurse -Filter 'XIVSubmarinesReturn.dll' | Where-Object { $_.FullName -like '*bin*Release*' } | Select-Object -First 1
+          if (-not $dll) { throw 'XIVSubmarinesReturn.dll not found in Release outputs' }
+          $outDir = $dll.DirectoryName
+          $stage = Join-Path $env:RUNNER_TEMP 'xsr_stage'
+          $pkgDir = Join-Path $stage 'XIVSubmarinesReturn'
+          New-Item -ItemType Directory -Force -Path $pkgDir | Out-Null
+          Copy-Item (Join-Path $outDir 'XIVSubmarinesReturn.dll') $pkgDir -Force
+          if (Test-Path (Join-Path $outDir 'manifest.json')) { Copy-Item (Join-Path $outDir 'manifest.json') $pkgDir -Force }
+          if (Test-Path (Join-Path $outDir 'icon.png')) { Copy-Item (Join-Path $outDir 'icon.png') $pkgDir -Force }
+          $dest = Join-Path $outDir 'latest.zip'
+          if (Test-Path $dest) { Remove-Item $dest -Force }
+          Compress-Archive -Path (Join-Path $stage '*') -DestinationPath $dest
+          Write-Host "created: $dest"
+      - name: Locate artifact
+        id: loc
+        shell: pwsh
+        run: |
+          $zip = Get-ChildItem -Recurse -Filter latest.zip | Select-Object -First 1
+          if (-not $zip) { throw "latest.zip not found" }
+          "zip=$($zip.FullName)" >> $env:GITHUB_OUTPUT
       - name: Upload Release Assets
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            bin/Release/net9.0-windows/XIVSubmarinesReturn/latest.zip
-            bin/x64/Release/net9.0-windows/manifest.json
-            bin/x64/Release/net9.0-windows/icon.png
+          files: ${{ steps.loc.outputs.zip }}
+          generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

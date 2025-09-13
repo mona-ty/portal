@@ -99,6 +99,31 @@ namespace XIVSubmarinesReturn.UI
             try { ImGui.Text(text ?? string.Empty); ImGui.Separator(); } catch { }
         }
 
+        public static void SectionHeaderBar(string text, System.Numerics.Vector4 color, float height = 22f)
+        {
+            try
+            {
+                var dl = ImGui.GetWindowDrawList();
+                var p = ImGui.GetCursorScreenPos();
+                var w = ImGui.GetContentRegionAvail().X;
+                var r = 5f;
+                var rectMin = p;
+                var rectMax = new System.Numerics.Vector2(p.X + MathF.Max(40f, w), p.Y + height);
+                uint bg = ImGui.ColorConvertFloat4ToU32(color);
+                dl.AddRectFilled(rectMin, rectMax, bg, r);
+                // テキスト色（背景の明度から推定）
+                float lum = 0.299f * color.X + 0.587f * color.Y + 0.114f * color.Z;
+                bool lightBg = lum > 0.6f;
+                var ts = ImGui.CalcTextSize(text ?? string.Empty);
+                var tx = p.X + 8f; var ty = p.Y + MathF.Max(2f, (height - ts.Y) * 0.5f);
+                uint fg = ImGui.ColorConvertFloat4ToU32(lightBg ? new System.Numerics.Vector4(0.15f, 0.15f, 0.15f, 1f) : new System.Numerics.Vector4(1f, 1f, 1f, 1f));
+                dl.AddText(new System.Numerics.Vector2(tx, ty), fg, text ?? string.Empty);
+                // カーソルをバーの下へ移動
+                ImGui.Dummy(new System.Numerics.Vector2(w, height + 4f));
+            }
+            catch { }
+        }
+
         public static bool BeginForm(string id) { try { ImGui.PushID(id); return true; } catch { return false; } }
         public static void EndForm() { try { ImGui.PopID(); } catch { } }
         public static void FormRow(string label, Action draw)

@@ -1,0 +1,20 @@
+[
+  {
+    "Author": "Mona Tierra",
+    "Name": "XIV Submarines Return",
+    "Description": "Captures company workshop submarine list and writes JSON for external tools.",
+    "InternalName": "XIVSubmarinesReturn",
+    "AssemblyVersion": "1.0.6",
+    "RepoUrl": "https://github.com/mona-ty/XIVSubmarinesReturn",
+    "ApplicableVersion": "any",
+    "DalamudApiLevel": 13,
+    "Punchline": "Submarine list -> JSON bridge",
+    "IconUrl": "https://raw.githubusercontent.com/mona-ty/XIVSubmarinesReturn/main/icon.png",
+    "ImageUrls": [
+      "https://raw.githubusercontent.com/mona-ty/XIVSubmarinesReturn/main/icon.png"
+    ],
+    "DownloadLinkInstall": "https://github.com/mona-ty/XIVSubmarinesReturn/releases/latest/download/latest.zip",
+    "DownloadLinkUpdate": "https://github.com/mona-ty/XIVSubmarinesReturn/releases/latest/download/latest.zip",
+    "LastUpdate": 1757755482
+  }
+]

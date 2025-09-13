@@ -29,6 +29,7 @@ public sealed partial class Plugin : IDalamudPlugin
     private readonly IGameGui _gameGui;
     private readonly IPluginLog _log;
     private readonly IToastGui _toast;
+    private readonly object? _addonLifecycle; // AddonLifecycle (via reflection when available)
     private readonly IClientState? _client;
 
     public Configuration Config { get; private set; }
@@ -43,6 +44,9 @@ public sealed partial class Plugin : IDalamudPlugin
     private DateTime _lastAutoCaptureUtc = DateTime.MinValue;
     private bool _wasAddonVisible;
     private DateTime _lastTickUtc;
+    private int _deferredCaptureFrames; // Addon可視化後の遅延キャプチャカウンタ
+    private int _deferredCaptureFrames2; // 追加の再試行
+    private string _deferredAddonName = string.Empty;
 
     private AlarmScheduler? _alarm;
     private DiscordNotifier? _discord;
@@ -69,6 +73,7 @@ public sealed partial class Plugin : IDalamudPlugin
         _log = log;
         _toast = toast;
         _client = client;
+        _addonLifecycle = null;
 
         Config = _pi.GetPluginConfig() as Configuration ?? new Configuration();
 
@@ -98,6 +103,7 @@ public sealed partial class Plugin : IDalamudPlugin
         });
 
         _framework.Update += OnFrameworkUpdate;
+        try { SetupAddonLifecycleListeners(); } catch { }
         InitUI();
 
         // 設定移行（V1 -> V2: プロファイル導入）
@@ -141,6 +147,24 @@ public sealed partial class Plugin : IDalamudPlugin
         }
         catch { }
     }
+
+    private unsafe void SetupAddonLifecycleListeners()
+    {
+        if (!Config.EnableAddonLifecycleCapture) return;
+        if (_addonLifecycle == null)
+        {
+            try { Services.XsrDebug.Log(Config, "AddonLifecycle not available; using deferred captures"); } catch { }
+            return;
+        }
+        var names = new[]
+        {
+            Config.AddonName,
+            "CompanyCraftSubmersibleList", "FreeCompanyWorkshopSubmersible", "CompanyCraftSubmersible", "CompanyCraftList",
+            "SubmersibleExploration", "SubmarineExploration", "SubmersibleVoyage", "ExplorationResult",
+        };
+        // NOTE: Formal registration via Dalamud IAddonLifecycle will be attempted in a future build
+    }
+
 
     private void TryPersistActiveProfileSnapshot(SubmarineSnapshot snap)
     {
@@ -354,17 +378,72 @@ public sealed partial class Plugin : IDalamudPlugin
         try { return GetActiveProfile()?.RouteNames ?? (Config.RouteNames ?? new System.Collections.Generic.Dictionary<byte, string>()); } catch { return Config.RouteNames ?? new System.Collections.Generic.Dictionary<byte, string>(); }
     }
 
+    // ===== LastGoodRoute 永続キャッシュ（降格防止 & TTL） =====
+    private LastGoodRoute? GetLastGoodRoute(int slot)
+    {
+        try
+        {
+            var p = GetActiveProfile();
+            if (p?.LastGoodRouteBySlot != null && p.LastGoodRouteBySlot.TryGetValue(slot, out var lg)) return lg;
+        }
+        catch { }
+        return null;
+    }
+
+    private void SaveLastGoodRoute(int slot, System.Collections.Generic.List<int> numbers, RouteConfidence conf, string source)
+    {
+        try
+        {
+            if (!Config.AdoptCachePersist) return;
+            var p = GetActiveProfile(); if (p == null) return;
+            if (p.LastGoodRouteBySlot == null) p.LastGoodRouteBySlot = new System.Collections.Generic.Dictionary<int, LastGoodRoute>();
+            var key = BuildRouteKeyFromNumbers(numbers);
+            p.LastGoodRouteBySlot[slot] = new LastGoodRoute
+            {
+                RouteKey = key,
+                Confidence = conf,
+                CapturedAtUtc = DateTimeOffset.UtcNow,
+                Source = source
+            };
+            SaveConfig();
+        }
+        catch { }
+    }
+
+    private static int ConfidenceScore(RouteConfidence c) => c switch
+    {
+        RouteConfidence.None => 0,
+        RouteConfidence.Tail => 1,
+        RouteConfidence.Partial => 2,
+        RouteConfidence.Full => 3,
+        RouteConfidence.Array => 4,
+        _ => 0,
+    };
+
     private void OnCmdDump(string cmd, string args)
     {
         try
         {
-            if (!TryCaptureFromConfiguredAddon(out var snap))
+            SubmarineSnapshot? snap = null;
+            if (Config.MemoryOnlyMode)
             {
-                if (Config.UseMemoryFallback && TryCaptureFromMemory(out snap)) { }
-                else {
-                _log.Warning("Direct capture failed; no JSON written.");
-                _chat.Print("[Submarines] 取得に失敗しました。工房の潜水艦一覧（右パネルに残り時間が出る画面）を開いて /xsr dump を実行してください。");
-                return;
+                if (!TryCaptureFromMemory(out snap))
+                {
+                    _log.Warning("Memory-only capture failed; no JSON written.");
+                    _chat.Print("[Submarines] メモリからの取得に失敗しました。工房に入り直してから /xsr dump をお試しください。");
+                    return;
+                }
+            }
+            else
+            {
+                if (!TryCaptureFromConfiguredAddon(out snap))
+                {
+                    if (Config.UseMemoryFallback && TryCaptureFromMemory(out snap)) { }
+                    else {
+                        _log.Warning("Direct capture failed; no JSON written.");
+                        _chat.Print("[Submarines] 取得に失敗しました。工房の潜水艦一覧（右パネルに残り時間が出る画面）を開いて /xsr dump を実行してください。");
+                        return;
+                    }
                 }
             }
             try { TrySetIdentity(snap); } catch { }
@@ -621,7 +700,7 @@ public sealed partial class Plugin : IDalamudPlugin
 
                 // route key: CurrentExplorationPoints[0..] を連結（例: Point-15 - Point-20）
         {
-            _chat.Print($"[Submarines] Version: {typeof(Plugin).Assembly.GetName().Version?.ToString(3) ?? "0.0.0"}");
+            _chat.Print($"[Submarines] Version: {GetVersionWithBuild()}");
             _chat.Print("[Submarines] Commands: dump | dumpmem | learnnames | ui | cfg mem on|off | open | addon <name> | version");
             _chat.Print("  /xsr dump  -> same as /subdump");
             _chat.Print("  /xsr open  -> same as /subopen");
@@ -643,8 +722,11 @@ public sealed partial class Plugin : IDalamudPlugin
                 case "dumpmem":
                     CmdDumpFromMemory();
                     break;
+                case "memscan":
+                    CmdMemScan(rest);
+                    break;
                 case "version":
-                    _chat.Print($"[Submarines] Version: {typeof(Plugin).Assembly.GetName().Version?.ToString(3) ?? "0.0.0"}");
+                    _chat.Print($"[Submarines] Version: {GetVersionWithBuild()}");
                     break;
                 case "ui":
                     _showUI = true;
@@ -772,7 +854,7 @@ public sealed partial class Plugin : IDalamudPlugin
                 }
                 catch { }
 
-                // Optional: route key from CurrentExplorationPoints
+                // Optional: route key from CurrentExplorationPoints (+構造体内スキャンでの復元)
                 try
                 {
                     var pts = new System.Collections.Generic.List<byte>(5);
@@ -790,33 +872,38 @@ public sealed partial class Plugin : IDalamudPlugin
                     try { unsafe { fixed (byte* rp = s->CurrentExplorationPoints) { fieldOff = (int)((byte*)rp - (byte*)s); } } } catch { }
 
                     string routeFromMem = pts.Count > 0 ? FormatRouteKey(pts) : string.Empty;
+                    // 構造体内をスキャンし、3..5点の候補が見つかれば採用
+                    try
+                    {
+                        if (Config.MemoryRouteScanEnabled)
+                        {
+                            if (TryRecoverFullRouteFromMemory(s, pts, fieldOff, out var recovered, out var recOff, out var recStride, out var recReversed))
+                            {
+                                if (recovered != null && recovered.Count >= Math.Max(3, Config.MemoryRouteMinCount))
+                                {
+                                    routeFromMem = BuildRouteKeyFromNumbers(recovered);
+                                    try { Services.XsrDebug.Log(Config, $"S{i + 1} route recovered: off=0x{recOff:X}, stride={recStride}, reversed={recReversed}, memTail=[{string.Join(",", pts)}], full=[{string.Join(",", recovered)}]"); } catch { }
+                                }
+                            }
+                        }
+                    }
+                    catch { }
 
-                    // ルート補完: メモリ値が1～2点しかない場合、キャッシュ（前回フルルート）と突き合わせて補う
+                    // 採用: TTL/Confidence を考慮した一元採用（AdoptBest）
                     try
                     {
                         int slot = i + 1;
-                        if (pts.Count >= 3)
+                        var memNums0 = ParseRouteNumbers(routeFromMem);
+                        var cachedNums0 = TryGetCachedNumbers(slot);
+                        bool adoptedCacheLocal = false; string reasonLocal = "mem";
+                        var best = AdoptBest(memNums0, cachedNums0, slot, out adoptedCacheLocal, out reasonLocal);
+                        if (best != null && best.Count > 0)
                         {
-                            rec.RouteKey = routeFromMem;
-                            try { SaveCache(slot, ParseRouteNumbers(routeFromMem)); } catch { }
-                        }
-                        else if (pts.Count > 0)
-                        {
-                            rec.RouteKey = routeFromMem;
-                            var map = GetLastRouteMap();
-                            if (map != null && map.TryGetValue(slot, out var prev) && !string.IsNullOrWhiteSpace(prev))
-                            {
-                                var prevNums = ParseRouteNumbers(prev);
-                                var curNums = pts.ConvertAll(b => (int)b);
-                                if (IsSuffix(prevNums, curNums))
-                                    rec.RouteKey = prev; // 末尾一致なら過去のフルルートを採用
-                            }
-                        }
-                        else
-                        {
-                            var map2 = GetLastRouteMap();
-                            if (map2 != null && map2.TryGetValue(slot, out var prev) && !string.IsNullOrWhiteSpace(prev))
-                                rec.RouteKey = prev;
+                            rec.RouteKey = BuildRouteKeyFromNumbers(best);
+                            if (rec.Extra == null) rec.Extra = new System.Collections.Generic.Dictionary<string, string>(System.StringComparer.Ordinal);
+                            rec.Extra["RouteShort"] = BuildRouteShortFromNumbers(best);
+                            if (best.Count >= 3) { try { SaveCache(slot, best); } catch { } }
+                            try { Services.XsrDebug.Log(Config, $"S{slot} adopt: reason={reasonLocal}, len={best.Count}"); } catch { }
                         }
                     }
                     catch { rec.RouteKey = routeFromMem; }
@@ -824,68 +911,49 @@ public sealed partial class Plugin : IDalamudPlugin
                     try { Services.XsrDebug.Log(Config, $"S{i + 1} route bytes = {(pts.Count>0?string.Join(",", pts):"(none)")}"); } catch { }
                     try { TryWriteExtractTrace(new System.Collections.Generic.List<string> { $"route: off=0x{fieldOff:X},stride=1 -> [{string.Join(",", pts)}]" }); } catch { }
 
-                    // Re-evaluate route using cache + contiguous-subsequence logic (review plan)
+                    // 採用のトレース（mem/cache/final）
                     try
                     {
-                        var memNums = new System.Collections.Generic.List<int>(pts.Count);
-                        foreach (var b in pts) memNums.Add((int)b);
+                        var memNums = ParseRouteNumbers(routeFromMem);
                         var cached = TryGetCachedNumbers(i + 1);
-                        System.Collections.Generic.List<int> routeNumbers;
-                        bool adoptedCache = false; string reason = "mem";
-                        if (memNums.Count >= 3)
+                        var routeNumbers = ParseRouteNumbers(rec.RouteKey ?? string.Empty);
+                        bool adoptedCache = cached != null && routeNumbers.SequenceEqual(cached);
+                        string reason = adoptedCache ? "cache" : "mem-or-ttl";
+                        LogRouteAdoption(i + 1, memNums, cached, routeNumbers, adoptedCache, reason);
+                        // MemoryOnly の場合、UIパネルからの補完は行わない
+                        if (!Config.MemoryOnlyMode)
                         {
-                            routeNumbers = memNums; SaveCache(i + 1, routeNumbers);
-                        }
-                        else if (memNums.Count > 0 && cached != null && cached.Count >= 3)
-                        {
-                            var memR = ReverseCopy(memNums);
-                            if (ContainsContiguousSubsequence(cached, memNums)) { routeNumbers = cached; adoptedCache = true; reason = "subseq"; }
-                            else if (ContainsContiguousSubsequence(cached, memR)) { routeNumbers = cached; adoptedCache = true; reason = "reverse-subseq"; }
-                            else { routeNumbers = memNums; }
-                        }
-                        else if (memNums.Count == 0 && cached != null && cached.Count >= 3)
-                        {
-                            routeNumbers = cached; adoptedCache = true; reason = "none";
-                        }
-                        else
-                        {
-                            routeNumbers = memNums;
-                        }
-
-                        rec.RouteKey = BuildRouteKeyFromNumbers(routeNumbers);
-                        if (rec.Extra == null) rec.Extra = new System.Collections.Generic.Dictionary<string, string>(System.StringComparer.Ordinal);
-                        rec.Extra["RouteShort"] = BuildRouteShortFromNumbers(routeNumbers);
-                        // UIパネルからの補完（SelectString限定から、複数アドオン走査へ拡張）
-                        try
-                        {
-                            if (routeNumbers.Count < 3)
+                            try
                             {
-                                var addonNames = new[] {
-                                    "SelectString","SelectIconString",
-                                    "CompanyCraftSubmersibleList","FreeCompanyWorkshopSubmersible","CompanyCraftSubmersible","CompanyCraftList",
-                                    "SubmersibleExploration","SubmarineExploration","SubmersibleVoyage","ExplorationResult",
-                                };
-                                foreach (var an in addonNames)
+                                if (routeNumbers.Count < 3)
                                 {
-                                    if (TryCaptureFromAddon(an, out var snapUi) && snapUi != null && snapUi.Items != null)
+                                    var addonNames = new[] {
+                                        "SelectString","SelectIconString",
+                                        "CompanyCraftSubmersibleList","FreeCompanyWorkshopSubmersible","CompanyCraftSubmersible","CompanyCraftList",
+                                        "SubmersibleExploration","SubmarineExploration","SubmersibleVoyage","ExplorationResult",
+                                    };
+                                    foreach (var an in addonNames)
                                     {
-                                        var match = snapUi.Items.FirstOrDefault(x => string.Equals((x.Name ?? string.Empty).Trim(), (rec.Name ?? string.Empty).Trim(), System.StringComparison.Ordinal));
-                                        var k = match?.RouteKey;
-                                        var numsUi = string.IsNullOrWhiteSpace(k) ? null : ParseRouteNumbers(k);
-                                        if (numsUi != null && numsUi.Count >= 3)
+                                        if (TryCaptureFromAddon(an, out var snapUi) && snapUi != null && snapUi.Items != null)
                                         {
-                                            rec.RouteKey = BuildRouteKeyFromNumbers(numsUi);
-                                            if (rec.Extra == null) rec.Extra = new System.Collections.Generic.Dictionary<string, string>(System.StringComparer.Ordinal);
-                                            rec.Extra["RouteShort"] = BuildRouteShortFromNumbers(numsUi);
-                                            SaveCache(i + 1, numsUi);
-                                            routeNumbers = numsUi; adoptedCache = true; reason = "ui-panels";
-                                            break;
+                                            var match = snapUi.Items.FirstOrDefault(x => string.Equals((x.Name ?? string.Empty).Trim(), (rec.Name ?? string.Empty).Trim(), System.StringComparison.Ordinal));
+                                            var k = match?.RouteKey;
+                                            var numsUi = string.IsNullOrWhiteSpace(k) ? null : ParseRouteNumbers(k);
+                                            if (numsUi != null && numsUi.Count >= 3)
+                                            {
+                                                rec.RouteKey = BuildRouteKeyFromNumbers(numsUi);
+                                                if (rec.Extra == null) rec.Extra = new System.Collections.Generic.Dictionary<string, string>(System.StringComparer.Ordinal);
+                                                rec.Extra["RouteShort"] = BuildRouteShortFromNumbers(numsUi);
+                                                SaveCache(i + 1, numsUi);
+                                                routeNumbers = numsUi; adoptedCache = true; reason = "ui-panels";
+                                                break;
+                                            }
                                         }
                                     }
                                 }
                             }
+                            catch { }
                         }
-                        catch { }
 
                         var memLog = string.Join(",", memNums);
                         var cacheLog = cached == null ? "-" : string.Join(",", cached);
@@ -898,34 +966,37 @@ public sealed partial class Plugin : IDalamudPlugin
 
                 snapshot.Items.Add(rec);
             }
-            // 事後リペア: スナップショット内に短いルートが残っている場合、可視パネルから一括補完
+            // 事後リペア: MemoryOnly の場合は UI からの補完を行わない
             try
             {
-                bool NeedsRepair(string? rk) => ParseRouteNumbers(rk ?? string.Empty).Count < 3;
-                if (snapshot.Items.Any(it => NeedsRepair(it.RouteKey)))
+                if (!Config.MemoryOnlyMode)
                 {
-                    var addonNames = new[] {
-                        "CompanyCraftSubmersibleList","FreeCompanyWorkshopSubmersible","CompanyCraftSubmersible","CompanyCraftList",
-                        "SubmersibleExploration","SubmarineExploration","SubmersibleVoyage","ExplorationResult",
-                        "SelectString","SelectIconString",
-                    };
-                    foreach (var an in addonNames)
+                    bool NeedsRepair(string? rk) => ParseRouteNumbers(rk ?? string.Empty).Count < 3;
+                    if (snapshot.Items.Any(it => NeedsRepair(it.RouteKey)))
                     {
-                        if (!snapshot.Items.Any(it => NeedsRepair(it.RouteKey))) break;
-                        if (!TryCaptureFromAddon(an, out var snap2) || snap2?.Items == null) continue;
-                        foreach (var rec in snapshot.Items)
+                        var addonNames = new[] {
+                            "CompanyCraftSubmersibleList","FreeCompanyWorkshopSubmersible","CompanyCraftSubmersible","CompanyCraftList",
+                            "SubmersibleExploration","SubmarineExploration","SubmersibleVoyage","ExplorationResult",
+                            "SelectString","SelectIconString",
+                        };
+                        foreach (var an in addonNames)
                         {
-                            if (!NeedsRepair(rec.RouteKey)) continue;
-                            var m = snap2.Items.FirstOrDefault(x => string.Equals((x.Name ?? string.Empty).Trim(), (rec.Name ?? string.Empty).Trim(), System.StringComparison.Ordinal));
-                            var k = m?.RouteKey; if (string.IsNullOrWhiteSpace(k)) continue;
-                            var nums = ParseRouteNumbers(k);
-                            if (nums.Count >= 3)
+                            if (!snapshot.Items.Any(it => NeedsRepair(it.RouteKey))) break;
+                            if (!TryCaptureFromAddon(an, out var snap2) || snap2?.Items == null) continue;
+                            foreach (var rec in snapshot.Items)
                             {
-                                rec.RouteKey = BuildRouteKeyFromNumbers(nums);
-                                if (rec.Extra == null) rec.Extra = new System.Collections.Generic.Dictionary<string, string>(System.StringComparer.Ordinal);
-                                rec.Extra["RouteShort"] = BuildRouteShortFromNumbers(nums);
-                                SaveCache(rec.Slot ?? 0, nums);
-                                Services.XsrDebug.Log(Config, $"S{rec.Slot} route repaired via ui-panels -> [{string.Join(",", nums)}]");
+                                if (!NeedsRepair(rec.RouteKey)) continue;
+                                var m = snap2.Items.FirstOrDefault(x => string.Equals((x.Name ?? string.Empty).Trim(), (rec.Name ?? string.Empty).Trim(), System.StringComparison.Ordinal));
+                                var k = m?.RouteKey; if (string.IsNullOrWhiteSpace(k)) continue;
+                                var nums = ParseRouteNumbers(k);
+                                if (nums.Count >= 3)
+                                {
+                                    rec.RouteKey = BuildRouteKeyFromNumbers(nums);
+                                    if (rec.Extra == null) rec.Extra = new System.Collections.Generic.Dictionary<string, string>(System.StringComparer.Ordinal);
+                                    rec.Extra["RouteShort"] = BuildRouteShortFromNumbers(nums);
+                                    SaveCache(rec.Slot ?? 0, nums);
+                                    Services.XsrDebug.Log(Config, $"S{rec.Slot} route repaired via ui-panels -> [{string.Join(",", nums)}]");
+                                }
                             }
                         }
                     }
@@ -1035,16 +1106,15 @@ public sealed partial class Plugin : IDalamudPlugin
     {
         try
         {
-            var a = (args ?? string.Empty).Trim();
-            if (string.IsNullOrEmpty(a))
+            var a = args ?? string.Empty;
+            var m = System.Text.RegularExpressions.Regex.Match(a, "^\\s*(\\S+)\\s*(.*)$");
+            if (!m.Success || string.IsNullOrWhiteSpace(m.Groups[1].Value))
             {
                 PrintHelp();
                 return;
             }
-
-            var parts = a.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
-            var sub = parts[0].ToLowerInvariant();
-            var rest = parts.Length > 1 ? parts[1] : string.Empty;
+            var sub = (m.Groups[1].Value ?? string.Empty).ToLowerInvariant();
+            var rest = m.Groups[2].Value ?? string.Empty;
             switch (sub)
             {
                 case "dump":
@@ -1053,11 +1123,23 @@ public sealed partial class Plugin : IDalamudPlugin
                 case "dumpmem":
                     CmdDumpFromMemory();
                     break;
+                case "memscan":
+                    CmdMemScan(rest);
+                    break;
+                case "memdump":
+                    CmdMemDump(rest);
+                    break;
+                case "setroute":
+                    CmdSetRoute(rest);
+                    break;
+                case "getroute":
+                    CmdGetRoute(rest);
+                    break;
                 case "help":
                     PrintHelp();
                     break;
                 case "version":
-                    _chat.Print($"[Submarines] Version: {typeof(Plugin).Assembly.GetName().Version?.ToString(3) ?? "0.0.0"}");
+            _chat.Print($"[Submarines] Version: {GetVersionWithBuild()}");
                     break;
                 case "ui":
                     _showUI = true;
@@ -1100,10 +1182,14 @@ public sealed partial class Plugin : IDalamudPlugin
     {
         try
         {
-            _chat.Print($"[Submarines] Version: {typeof(Plugin).Assembly.GetName().Version?.ToString(3) ?? "0.0.0"}");
-            _chat.Print("[Submarines] Commands: help | dump | dumpmem | learnnames | ui | open | addon <name> | cfg mem on|off | version | probe | dumpstage");
+            _chat.Print($"[Submarines] Version: {GetVersionWithBuild()}");
+            _chat.Print("[Submarines] Commands: help | dump | dumpmem | memscan [slot] | learnnames | ui | open | addon <name> | cfg mem on|off | version | probe | dumpstage");
             _chat.Print("  /xsr dump       -> JSONを書き出し（/subdump と同等）");
             _chat.Print("  /xsr dumpmem    -> メモリ直読で取得");
+            _chat.Print("  /xsr memscan    -> メモリ内の計画航路候補を診断（チャット要約＋ログ詳細）");
+            _chat.Print("  /xsr memdump    -> 指定スロットの構造体近傍をHexダンプ（診断用）");
+            _chat.Print("  /xsr setroute <slot> <chain> -> 手動でフルルートをセット（キャッシュ初期化）");
+            _chat.Print("  /xsr getroute [slot] -> 最後に良かったルートを表示");
             _chat.Print("  /xsr ui         -> 設定ウィンドウを開く（/subcfg でも開く）");
             _chat.Print("  /xsr open       -> 出力フォルダを開く（/subopen と同等）");
             _chat.Print("  /xsr addon <n>  -> 取得対象のアドオン名を設定（/subaddon と同等）");
@@ -1112,6 +1198,423 @@ public sealed partial class Plugin : IDalamudPlugin
             _chat.Print("  /xsr dumpstage  -> 画面上の多数アドオンからテキスト走査");
         }
         catch { }
+    }
+
+    private string GetVersionWithBuild()
+    {
+        try
+        {
+            var ver = typeof(Plugin).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
+            string ts = string.Empty;
+            try
+            {
+                // 1) Prefer this assembly's on-disk timestamp
+                string? loc = null;
+                try { loc = typeof(Plugin).Assembly.Location; } catch { }
+                if (!string.IsNullOrWhiteSpace(loc) && System.IO.File.Exists(loc))
+                {
+                    var t = System.IO.File.GetLastWriteTime(loc);
+                    ts = t.ToString("yyyy-MM-dd HH:mm");
+                }
+                // 2) Fallback: Dev Plugins path (XIVLauncher)
+                if (string.IsNullOrWhiteSpace(ts))
+                {
+                    var app = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+                    var devDll = System.IO.Path.Combine(app, "XIVLauncher", "devPlugins", "XIVSubmarinesReturn", "XIVSubmarinesReturn.dll");
+                    var devMan = System.IO.Path.Combine(app, "XIVLauncher", "devPlugins", "XIVSubmarinesReturn", "manifest.json");
+                    if (System.IO.File.Exists(devDll)) ts = System.IO.File.GetLastWriteTime(devDll).ToString("yyyy-MM-dd HH:mm");
+                    else if (System.IO.File.Exists(devMan)) ts = System.IO.File.GetLastWriteTime(devMan).ToString("yyyy-MM-dd HH:mm");
+                }
+                // 3) Fallback: embedded manifest directory (if available via Location)
+                if (string.IsNullOrWhiteSpace(ts) && !string.IsNullOrWhiteSpace(loc))
+                {
+                    var dir = System.IO.Path.GetDirectoryName(loc) ?? string.Empty;
+                    var man = System.IO.Path.Combine(dir, "manifest.json");
+                    if (System.IO.File.Exists(man)) ts = System.IO.File.GetLastWriteTime(man).ToString("yyyy-MM-dd HH:mm");
+                }
+            }
+            catch { }
+            return string.IsNullOrWhiteSpace(ts) ? ver : $"{ver} ({ts})";
+        }
+        catch { return "0.0.0"; }
+    }
+
+    private unsafe void CmdMemScan(string args)
+    {
+        try
+        {
+            int? targetSlot = null;
+            var sarg = (args ?? string.Empty).Trim();
+            if (!string.IsNullOrWhiteSpace(sarg) && int.TryParse(sarg, out var n) && n >= 1 && n <= 4)
+                targetSlot = n;
+
+            var hm = HousingManager.Instance();
+            if (hm == null) { _chat.Print("[Submarines] memscan: 工房外です"); return; }
+            var wt = hm->WorkshopTerritory;
+            if (wt == null) { _chat.Print("[Submarines] memscan: 工房外です"); return; }
+
+            HousingWorkshopSubmersibleSubData* GetSubPtr(int idx)
+            {
+                try
+                {
+                    var p = wt->Submersible.DataPointers[idx].Value;
+                    if ((nint)p != 0) return (HousingWorkshopSubmersibleSubData*)p;
+                }
+                catch { }
+                try
+                {
+                    var basePtr = (HousingWorkshopSubmersibleSubData*)(&wt->Submersible);
+                    return basePtr + idx;
+                }
+                catch { }
+                return null;
+            }
+
+            int start = targetSlot ?? 1;
+            int end = targetSlot ?? 4;
+            for (int si = start; si <= end; si++)
+            {
+                var s = GetSubPtr(si - 1);
+                if (s == null) { _chat.Print($"[Submarines] S{si} memscan: pointer null"); continue; }
+
+                var tail = new System.Collections.Generic.List<byte>(5);
+                try
+                {
+                    for (int j = 0; j < 5; j++)
+                    {
+                        byte v = s->CurrentExplorationPoints[j];
+                        if (v == 0) break;
+                        if (v >= 1 && v <= 255) tail.Add(v);
+                    }
+                }
+                catch { }
+
+                int fieldOff = -1;
+                try { fixed (byte* rp = s->CurrentExplorationPoints) { fieldOff = (int)((byte*)rp - (byte*)s); } } catch { }
+
+                var cands = ScanRouteCandidates(s, tail, fieldOff, 3);
+                if (cands.Count == 0)
+                {
+                    // Fallback: full-struct scan (ignore window)
+                    try
+                    {
+                        int win = Config.MemoryRouteScanWindowBytes;
+                        Config.MemoryRouteScanWindowBytes = 0;
+                        try { cands = ScanRouteCandidates(s, tail, fieldOff, 3); }
+                        finally { Config.MemoryRouteScanWindowBytes = win; }
+                    }
+                    catch { }
+                    if (cands.Count == 0)
+                    {
+                        // Fallback 2: allow minCount=2 (visual probe)
+                        int savedMin = Config.MemoryRouteMinCount;
+                        try
+                        {
+                            Config.MemoryRouteMinCount = 2;
+                            cands = ScanRouteCandidates(s, tail, fieldOff, 3);
+                        }
+                        catch { }
+                        finally { Config.MemoryRouteMinCount = savedMin; }
+                        if (cands.Count == 0)
+                        {
+                            _chat.Print($"[Submarines] S{si} memscan: candidates=0, tail=[{string.Join(",", tail)}]");
+                            try { Services.XsrDebug.Log(Config, $"S{si} memscan: tail=[{string.Join(",", tail)}] candidates=0 (full-scan & min2 also empty)"); } catch { }
+                            continue;
+                        }
+                        else
+                        {
+                            _chat.Print($"[Submarines] S{si} memscan: (min2) best off=0x{cands[0].Offset:X}, stride={cands[0].Stride}, score={cands[0].Score}, seq=[{string.Join(",", cands[0].Sequence)}], tail=[{string.Join(",", tail)}], total={cands.Count}");
+                        }
+                    }
+                }
+
+                int shown = Math.Min(3, cands.Count);
+                for (int k = 0; k < shown; k++)
+                {
+                    var c = cands[k];
+                    try { Services.XsrDebug.Log(Config, $"S{si} cand[{k}] phase={c.Phase}, off=0x{c.Offset:X}, stride={c.Stride}, score={c.Score}, reversed={c.Reversed}, seq=[{string.Join(",", c.Sequence)}]"); } catch { }
+                }
+                var best = cands[0];
+                _chat.Print($"[Submarines] S{si} memscan: best phase={best.Phase}, off=0x{best.Offset:X}, stride={best.Stride}, score={best.Score}, seq=[{string.Join(",", best.Sequence)}], tail=[{string.Join(",", tail)}], total={cands.Count}");
+            }
+        }
+        catch (Exception ex)
+        {
+            _chat.PrintError($"[Submarines] memscan エラー: {ex.Message}");
+        }
+    }
+
+    private unsafe void CmdMemDump(string args)
+    {
+        try
+        {
+            var hm = HousingManager.Instance();
+            if (hm == null) { _chat.Print("[Submarines] memdump: 工房外です"); return; }
+            var wt = hm->WorkshopTerritory; if (wt == null) { _chat.Print("[Submarines] memdump: 工房外です"); return; }
+            var parts = (args ?? string.Empty).Trim().Split(new[]{' '}, StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length == 0 || !int.TryParse(parts[0], out var slot) || slot < 1 || slot > 4)
+            {
+                _chat.Print("[Submarines] memdump 使用法: /xsr memdump <slot 1..4> [offHex] [len]");
+                return;
+            }
+            int offReq = -1; int lenReq = 0x200;
+            if (parts.Length >= 2)
+            {
+                var t = parts[1].Trim();
+                if (t.StartsWith("0x", StringComparison.OrdinalIgnoreCase)) t = t.Substring(2);
+                if (int.TryParse(t, System.Globalization.NumberStyles.HexNumber, null, out var ov)) offReq = ov;
+            }
+            if (parts.Length >= 3) int.TryParse(parts[2], out lenReq);
+
+            HousingWorkshopSubmersibleSubData* GetSubPtr(int idx)
+            {
+                try { var p = wt->Submersible.DataPointers[idx].Value; if ((nint)p != 0) return (HousingWorkshopSubmersibleSubData*)p; } catch { }
+                try { var basePtr = (HousingWorkshopSubmersibleSubData*)(&wt->Submersible); return basePtr + idx; } catch { }
+                return null;
+            }
+            var s = GetSubPtr(slot - 1); if (s == null) { _chat.Print($"[Submarines] S{slot} memdump: pointer null"); return; }
+            int structSize = sizeof(FFXIVClientStructs.FFXIV.Client.Game.HousingWorkshopSubmersibleSubData);
+            byte* basePtr = (byte*)s;
+
+            // 既定オフセット: CurrentExplorationPoints の位置
+            int fieldOff = -1; try { fixed (byte* rp = s->CurrentExplorationPoints) { fieldOff = (int)((byte*)rp - (byte*)s); } } catch { }
+            int center = offReq >= 0 ? offReq : (fieldOff >= 0 ? fieldOff : 0);
+            int radius = Math.Max(16, lenReq);
+            int start = Math.Max(0, center - radius);
+            int end = Math.Min(structSize - 1, center + radius);
+
+            var dir = System.IO.Path.GetDirectoryName(BridgeWriter.CurrentFilePath()) ?? Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+            var path = System.IO.Path.Combine(dir, $"memdump_S{slot}_0x{start:X}-0x{end:X}.hex");
+            using var sw = new System.IO.StreamWriter(path, false, System.Text.Encoding.ASCII);
+            for (int off = start; off <= end; off += 16)
+            {
+                var line = new System.Text.StringBuilder();
+                line.Append($"{off,4:X}: ");
+                for (int k = 0; k < 16 && off + k <= end; k++)
+                {
+                    byte b = *(basePtr + off + k);
+                    line.Append(b.ToString("X2")).Append(' ');
+                }
+                sw.WriteLine(line.ToString());
+            }
+            sw.Flush();
+            _chat.Print($"[Submarines] S{slot} memdump: {path}");
+        }
+        catch (Exception ex) { _chat.PrintError($"[Submarines] memdump エラー: {ex.Message}"); }
+    }
+
+    private void CmdSetRoute(string args)
+    {
+        try
+        {
+            var a = (args ?? string.Empty).Trim();
+            var parts = a.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length < 2 || !int.TryParse(parts[0], out var slot) || slot < 1 || slot > 4)
+            {
+                _chat.Print("[Submarines] setroute 使用法: /xsr setroute <slot 1..4> <chain>"); return;
+            }
+            var nums = ParseRouteNumbers(parts[1]);
+            if (nums.Count < 3) { _chat.Print("[Submarines] setroute: 3点以上で指定してください"); return; }
+            SaveCache(slot, nums);
+            SaveLastGoodRoute(slot, nums, RouteConfidence.Full, "manual");
+            _chat.Print($"[Submarines] S{slot} setroute: [{string.Join(",", nums)}]");
+        }
+        catch (Exception ex) { _chat.PrintError($"[Submarines] setroute エラー: {ex.Message}"); }
+    }
+
+    private void CmdGetRoute(string args)
+    {
+        try
+        {
+            int? slot = null;
+            var s = (args ?? string.Empty).Trim();
+            if (int.TryParse(s, out var n) && n >= 1 && n <= 4) slot = n;
+            if (slot.HasValue)
+            {
+                var lg = GetLastGoodRoute(slot.Value);
+                if (lg == null || string.IsNullOrWhiteSpace(lg.RouteKey)) { _chat.Print($"[Submarines] S{slot} getroute: (none)"); return; }
+                _chat.Print($"[Submarines] S{slot} getroute: key='{lg.RouteKey}', conf={lg.Confidence}, at={lg.CapturedAtUtc:yyyy-MM-dd HH:mm}Z");
+            }
+            else
+            {
+                for (int i = 1; i <= 4; i++)
+                {
+                    var lg = GetLastGoodRoute(i);
+                    if (lg == null || string.IsNullOrWhiteSpace(lg.RouteKey)) { _chat.Print($"[Submarines] S{i} getroute: (none)"); }
+                    else _chat.Print($"[Submarines] S{i} getroute: key='{lg.RouteKey}', conf={lg.Confidence}, at={lg.CapturedAtUtc:yyyy-MM-dd HH:mm}Z");
+                }
+            }
+        }
+        catch (Exception ex) { _chat.PrintError($"[Submarines] getroute エラー: {ex.Message}"); }
+    }
+
+    private sealed class RouteCandidate
+    {
+        public int Offset { get; set; }
+        public int Stride { get; set; }
+        public bool Reversed { get; set; }
+        public int Score { get; set; }
+        public System.Collections.Generic.List<int> Sequence { get; set; } = new();
+        public string Phase { get; set; } = "window"; // window|full|lenhdr|phaseN
+    }
+
+    private unsafe System.Collections.Generic.List<RouteCandidate> ScanRouteCandidates(FFXIVClientStructs.FFXIV.Client.Game.HousingWorkshopSubmersibleSubData* s,
+        System.Collections.Generic.List<byte> tailBytes,
+        int currentFieldOffset,
+        int maxReturn)
+    {
+        var results = new System.Collections.Generic.List<RouteCandidate>();
+        try
+        {
+            if (!Config.MemoryRouteScanEnabled || s == null) return results;
+
+            int minCnt = Math.Max(3, Config.MemoryRouteMinCount);
+            int maxCnt = Math.Max(minCnt, Config.MemoryRouteMaxCount);
+            int structSize = sizeof(FFXIVClientStructs.FFXIV.Client.Game.HousingWorkshopSubmersibleSubData);
+            if (structSize <= 0 || structSize > 4096) structSize = 512;
+
+            var tail = new System.Collections.Generic.List<int>(tailBytes?.Count ?? 0);
+            if (tailBytes != null) foreach (var b in tailBytes) tail.Add((int)b);
+            var tailR = ReverseCopy(tail);
+
+            byte* basePtr = (byte*)s;
+            int curOff = currentFieldOffset;
+            int window = Config.MemoryRouteScanWindowBytes;
+            int offStart = 0, offEnd = structSize - 1;
+            if (window > 0 && curOff >= 0)
+            {
+                offStart = Math.Max(0, curOff - window);
+                offEnd = Math.Min(structSize - 1, curOff + window);
+            }
+
+            int[] strides = new[] { 1, 2, 4 };
+            for (int si = 0; si < strides.Length; si++)
+            {
+                int stride = strides[si];
+                for (int off = offStart; off <= offEnd; off++)
+                {
+                    // Pass A: 0終端の連続読み（従来）
+                    var cand = new System.Collections.Generic.List<int>(maxCnt);
+                    for (int k = 0; k < maxCnt; k++)
+                    {
+                        int pos = off + k * stride;
+                        if (pos >= structSize) break;
+                        byte v = *(basePtr + pos);
+                        if (v == 0)
+                        {
+                            if (Config.MemoryRouteZeroTerminated) break; else continue;
+                        }
+                        if (v < 1 || v > 255) { cand.Clear(); break; }
+                        cand.Add(v);
+                    }
+                    if (cand.Count < minCnt) continue;
+
+                    int score = 0; bool rev = false; bool hasTail = false;
+                    if (tail.Count > 0)
+                    {
+                        if (ContainsContiguousSubsequence(cand, tail)) { score += 20 + 3 * tail.Count; hasTail = true; }
+                        if (IsSuffix(cand, tail)) { score += 40 + 4 * tail.Count; hasTail = true; }
+                        if (ContainsContiguousSubsequence(cand, tailR)) { score += 18 + 2 * tail.Count; hasTail = true; rev = true; }
+                        if (IsSuffix(cand, tailR)) { score += 36 + 3 * tail.Count; hasTail = true; rev = true; }
+                    }
+                    else { hasTail = true; }
+                    if (!hasTail) continue;
+
+                    score += cand.Count;
+                    if (curOff >= 0)
+                    {
+                        int d = Math.Abs(off - curOff);
+                        score += Math.Max(0, 24 - d / 4);
+                    }
+
+                    results.Add(new RouteCandidate { Offset = off, Stride = stride, Reversed = rev, Score = score, Sequence = cand, Phase = (window > 0 ? "window" : "full") });
+                }
+
+                // Pass B: 長さヘッダ（lenhdr）モード（先頭1byte=長さ 3..5）
+                if (Config.MemoryScanPhaseEnabled)
+                {
+                    for (int off = offStart; off <= offEnd; off++)
+                    {
+                        int posLen = off;
+                        if (posLen >= structSize) break;
+                        byte len = *(basePtr + posLen);
+                        if (len < minCnt || len > maxCnt) continue;
+                        var cand = new System.Collections.Generic.List<int>(len);
+                        bool bad = false;
+                        for (int k = 0; k < len; k++)
+                        {
+                            int pos = off + (k + 1) * stride;
+                            if (pos >= structSize) { bad = true; break; }
+                            byte v = *(basePtr + pos);
+                            if (v < 1 || v > 255) { bad = true; break; }
+                            cand.Add(v);
+                        }
+                        if (bad || cand.Count < minCnt) continue;
+
+                        int score = 0; bool rev = false; bool hasTail = false;
+                        if (tail.Count > 0)
+                        {
+                            if (ContainsContiguousSubsequence(cand, tail)) { score += 20 + 3 * tail.Count; hasTail = true; }
+                            if (IsSuffix(cand, tail)) { score += 40 + 4 * tail.Count; hasTail = true; }
+                            if (ContainsContiguousSubsequence(cand, tailR)) { score += 18 + 2 * tail.Count; hasTail = true; rev = true; }
+                            if (IsSuffix(cand, tailR)) { score += 36 + 3 * tail.Count; hasTail = true; rev = true; }
+                        }
+                        else { hasTail = true; }
+                        if (!hasTail) continue;
+                        score += cand.Count;
+                        if (curOff >= 0)
+                        {
+                            int d = Math.Abs(off - curOff);
+                            score += Math.Max(0, 24 - d / 4);
+                        }
+                        results.Add(new RouteCandidate { Offset = off, Stride = stride, Reversed = rev, Score = score, Sequence = cand, Phase = "lenhdr" });
+                    }
+                    // Pass C: 位相ずらし（stride内の別バイト位置を使用）
+                    for (int bytePhase = 1; bytePhase < stride; bytePhase++)
+                    {
+                        for (int off = offStart; off <= offEnd; off++)
+                        {
+                            var cand = new System.Collections.Generic.List<int>(maxCnt);
+                            for (int k = 0; k < maxCnt; k++)
+                            {
+                                int pos = off + k * stride + bytePhase;
+                                if (pos >= structSize) break;
+                                byte v = *(basePtr + pos);
+                                if (v == 0)
+                                {
+                                    if (Config.MemoryRouteZeroTerminated) break; else continue;
+                                }
+                                if (v < 1 || v > 255) { cand.Clear(); break; }
+                                cand.Add(v);
+                            }
+                            if (cand.Count < minCnt) continue;
+                            int score = 0; bool rev = false; bool hasTail = false;
+                            if (tail.Count > 0)
+                            {
+                                if (ContainsContiguousSubsequence(cand, tail)) { score += 20 + 3 * tail.Count; hasTail = true; }
+                                if (IsSuffix(cand, tail)) { score += 40 + 4 * tail.Count; hasTail = true; }
+                                if (ContainsContiguousSubsequence(cand, tailR)) { score += 18 + 2 * tail.Count; hasTail = true; rev = true; }
+                                if (IsSuffix(cand, tailR)) { score += 36 + 3 * tail.Count; hasTail = true; rev = true; }
+                            }
+                            else { hasTail = true; }
+                            if (!hasTail) continue;
+                            score += cand.Count;
+                            if (curOff >= 0)
+                            {
+                                int d = Math.Abs(off - curOff);
+                                score += Math.Max(0, 24 - d / 4);
+                            }
+                            results.Add(new RouteCandidate { Offset = off, Stride = stride, Reversed = rev, Score = score, Sequence = cand, Phase = $"phase{stride}.{bytePhase}" });
+                        }
+                    }
+                }
+            }
+
+            results.Sort((a, b) => b.Score.CompareTo(a.Score));
+            if (maxReturn > 0 && results.Count > maxReturn) results.RemoveRange(maxReturn, results.Count - maxReturn);
+            return results;
+        }
+        catch { return results; }
     }
 
     private void OnCmdSetAddon(string cmd, string args)
@@ -1281,6 +1784,94 @@ public sealed partial class Plugin : IDalamudPlugin
         catch { return false; }
     }
 
+    // HousingWorkshopSubmersibleSubData 内部の連続バイト列から 3..5 点の「計画航路」を推定復元
+    private unsafe bool TryRecoverFullRouteFromMemory(FFXIVClientStructs.FFXIV.Client.Game.HousingWorkshopSubmersibleSubData* s,
+        System.Collections.Generic.List<byte> tailBytes,
+        int currentFieldOffset,
+        out System.Collections.Generic.List<int> recovered,
+        out int bestOff,
+        out int bestStride,
+        out bool reversed)
+    {
+        recovered = new System.Collections.Generic.List<int>();
+        bestOff = -1; bestStride = 1; reversed = false;
+        try
+        {
+            if (!Config.MemoryRouteScanEnabled || s == null) return false;
+            int minCnt = Math.Max(3, Config.MemoryRouteMinCount);
+            int maxCnt = Math.Max(minCnt, Config.MemoryRouteMaxCount);
+
+            int structSize = sizeof(FFXIVClientStructs.FFXIV.Client.Game.HousingWorkshopSubmersibleSubData);
+            if (structSize <= 0 || structSize > 4096) structSize = 512;
+
+            var tail = new System.Collections.Generic.List<int>(tailBytes?.Count ?? 0);
+            if (tailBytes != null) foreach (var b in tailBytes) tail.Add((int)b);
+            var tailR = ReverseCopy(tail);
+
+            byte* basePtr = (byte*)s;
+            int bestScore = 0; System.Collections.Generic.List<int>? best = null; bool bestRev = false; int offBest = -1; int strideBest = 1;
+            int curOff = currentFieldOffset;
+            int window = Config.MemoryRouteScanWindowBytes;
+            int offStart = 0, offEnd = structSize - 1;
+            if (window > 0 && curOff >= 0)
+            {
+                offStart = Math.Max(0, curOff - window);
+                offEnd = Math.Min(structSize - 1, curOff + window);
+            }
+
+            bool anyWithTail = false;
+            int[] strides = new[] { 1, 2, 4 };
+            for (int si = 0; si < strides.Length; si++)
+            {
+                int stride = strides[si];
+                for (int off = offStart; off <= offEnd; off++)
+                {
+                    var cand = new System.Collections.Generic.List<int>(maxCnt);
+                    for (int k = 0; k < maxCnt; k++)
+                    {
+                        int pos = off + k * stride;
+                        if (pos >= structSize) break;
+                        byte v = *(basePtr + pos);
+                        if (v == 0) break;
+                        if (v < 1 || v > 255) { cand.Clear(); break; }
+                        cand.Add(v);
+                    }
+                    if (cand.Count < minCnt) continue;
+
+                    int score = 0; bool rev = false; bool hasTail = false;
+                    if (tail.Count > 0)
+                    {
+                        if (ContainsContiguousSubsequence(cand, tail)) { score += 20 + 3 * tail.Count; hasTail = true; }
+                        if (IsSuffix(cand, tail)) { score += 40 + 4 * tail.Count; hasTail = true; }
+                        if (ContainsContiguousSubsequence(cand, tailR)) { score += 18 + 2 * tail.Count; hasTail = true; rev = true; }
+                        if (IsSuffix(cand, tailR)) { score += 36 + 3 * tail.Count; hasTail = true; rev = true; }
+                    }
+                    else { hasTail = true; }
+                    if (!hasTail) continue;
+                    anyWithTail = true;
+                    score += cand.Count;
+                    if (curOff >= 0)
+                    {
+                        int d = Math.Abs(off - curOff);
+                        score += Math.Max(0, 24 - d / 4);
+                    }
+
+                    if (score > bestScore)
+                    {
+                        bestScore = score; best = cand; bestRev = rev; offBest = off; strideBest = stride;
+                    }
+                }
+            }
+
+            if (best != null && best.Count >= minCnt && bestScore > 0 && (anyWithTail || tail.Count == 0))
+            {
+                recovered = best; bestOff = offBest; bestStride = strideBest; reversed = bestRev; return true;
+            }
+            return false;
+        }
+        catch { return false; }
+    }
+
     private System.Collections.Generic.List<int>? TryGetCachedNumbers(int slot)
     {
         try
@@ -1312,6 +1903,62 @@ public sealed partial class Plugin : IDalamudPlugin
         catch { }
     }
 
+    // 採用ロジック（Complete > Partial > Tail, 長さ優先, TTL/Confidence守る）
+    private System.Collections.Generic.List<int> AdoptBest(System.Collections.Generic.List<int> memNums, System.Collections.Generic.List<int>? cached, int slot, out bool adoptedCache, out string reason)
+    {
+        adoptedCache = false; reason = "mem";
+        var memLen = memNums?.Count ?? 0;
+        var cacheLen = cached?.Count ?? 0;
+
+        // TTL保護：Full/Array は TTL 内なら無条件保持
+        try
+        {
+            var lg = GetLastGoodRoute(slot);
+            if (lg != null && !string.IsNullOrWhiteSpace(lg.RouteKey))
+            {
+                var ttl = TimeSpan.FromHours(Math.Max(1, Config.AdoptTtlHours));
+                if (DateTimeOffset.UtcNow - lg.CapturedAtUtc <= ttl && ConfidenceScore(lg.Confidence) >= ConfidenceScore(RouteConfidence.Full))
+                {
+                    var nums = ParseRouteNumbers(lg.RouteKey);
+                    adoptedCache = true; reason = "ttl";
+                    return nums;
+                }
+            }
+        }
+        catch { }
+
+        // 比較: 長い方優先（Complete > Partial > Tail の代替として長さで序数化）
+        if (Config.AdoptPreferLonger)
+        {
+            if (cacheLen >= 3 && memLen < cacheLen)
+            {
+                // Suffix/包含の場合はキャッシュ維持
+                if (IsSuffix(cached!, memNums) || ContainsContiguousSubsequence(cached!, memNums))
+                {
+                    adoptedCache = true; reason = "cache-longer";
+                    return cached!;
+                }
+            }
+        }
+
+        // デフォルト: memNums を採用（3点以上なら保存）
+        if (memLen >= 3)
+        {
+            SaveLastGoodRoute(slot, memNums, RouteConfidence.Full, "mem");
+            return memNums;
+        }
+
+        // mem が短い場合、キャッシュに頼る
+        if (cacheLen >= 3)
+        {
+            adoptedCache = true; reason = "cache";
+            return cached!;
+        }
+
+        // どちらも短い → そのまま（mem）
+        return memNums ?? new System.Collections.Generic.List<int>();
+    }
+
     private string BuildRouteShortFromNumbers(System.Collections.Generic.List<int> nums)
     {
         try
@@ -1325,6 +1972,11 @@ public sealed partial class Plugin : IDalamudPlugin
                 var rmap = GetRouteNameMap();
                 if (string.IsNullOrWhiteSpace(letter) && rmap != null && rmap.TryGetValue((byte)n, out var nm) && !string.IsNullOrWhiteSpace(nm))
                     letter = nm;
+                // 追加フォールバック: 1..26 は A..Z として表記（Mapヒント/別名が未整備でも一般的表記に合わせる）
+                if (string.IsNullOrWhiteSpace(letter) && n >= 1 && n <= 26)
+                {
+                    letter = ((char)('A' + (n - 1))).ToString();
+                }
                 parts.Add(string.IsNullOrWhiteSpace(letter) ? $"P{n}" : letter!);
             }
             return string.Join('>', parts);
@@ -1345,6 +1997,40 @@ public sealed partial class Plugin : IDalamudPlugin
             return true;
         }
         catch { return false; }
+    }
+
+    private void LogRouteAdoption(int slot,
+        System.Collections.Generic.List<int> memNums,
+        System.Collections.Generic.List<int>? cacheNums,
+        System.Collections.Generic.List<int> finalNums,
+        bool adoptedCache,
+        string reason,
+        string? phase = null,
+        int? off = null,
+        int? stride = null,
+        bool? reversed = null)
+    {
+        try
+        {
+            var lg = GetLastGoodRoute(slot);
+            string conf = lg?.Confidence.ToString() ?? "None";
+            string ttl = "none";
+            if (lg != null)
+            {
+                var active = (DateTimeOffset.UtcNow - lg.CapturedAtUtc) <= TimeSpan.FromHours(Math.Max(1, Config.AdoptTtlHours));
+                ttl = active ? "active" : "expired";
+            }
+            string memLog = string.Join(",", memNums ?? new System.Collections.Generic.List<int>());
+            string cacheLog = cacheNums == null ? "-" : string.Join(",", cacheNums);
+            string finalLog = string.Join(",", finalNums ?? new System.Collections.Generic.List<int>());
+            string offStr = off.HasValue ? ($"0x{off.Value:X}") : "-";
+            string strideStr = stride.HasValue ? stride.Value.ToString() : "-";
+            string revStr = reversed.HasValue ? (reversed.Value ? "true" : "false") : "-";
+            string phaseStr = string.IsNullOrWhiteSpace(phase) ? "-" : phase;
+            Services.XsrDebug.Log(Config,
+                $"S{slot} adopt-trace mem=[{memLog}], cache=[{cacheLog}], final=[{finalLog}], adopted={(adoptedCache ? "cache" : "mem")}, reason={reason}, phase={phaseStr}, off={offStr}, stride={strideStr}, reversed={revStr}, conf={conf}, ttl={ttl}");
+        }
+        catch { }
     }
 
     private static System.Collections.Generic.List<string> InferNamesFromLines(System.Collections.Generic.List<string> lines)
@@ -1610,8 +2296,57 @@ public sealed partial class Plugin : IDalamudPlugin
                     existing.DurationMinutes = rec.DurationMinutes;
                 if (!existing.Rank.HasValue && rec.Rank.HasValue)
                     existing.Rank = rec.Rank;
-                if (string.IsNullOrEmpty(existing.RouteKey) && !string.IsNullOrEmpty(rec.RouteKey))
-                    existing.RouteKey = rec.RouteKey;
+
+                // Route merge policy:
+                // - If UI route has >=3 points (numeric) and current route has fewer, adopt UI route (normalize to Point-xx)
+                // - If current route is empty and UI route exists, adopt UI route
+                // - If UI route is textual (letters like M>R>O>J>Z) and provides more tokens than current, prefer it for display (RouteShort)
+                if (!string.IsNullOrWhiteSpace(rec.RouteKey))
+                {
+                    try
+                    {
+                        var curKey = existing.RouteKey ?? string.Empty;
+                        var curNums = ParseRouteNumbers(curKey);
+                        var uiNums = ParseRouteNumbers(rec.RouteKey);
+
+                        bool adopted = false; string reason = string.Empty;
+
+                        if (uiNums.Count >= 3 && uiNums.Count > curNums.Count)
+                        {
+                            // Prefer fuller UI route (numeric) and normalize
+                            existing.RouteKey = BuildRouteKeyFromNumbers(uiNums);
+                            if (existing.Extra == null) existing.Extra = new System.Collections.Generic.Dictionary<string, string>(System.StringComparer.Ordinal);
+                            existing.Extra["RouteShort"] = BuildRouteShortFromNumbers(uiNums);
+                            try { SaveCache(existing.Slot ?? 0, uiNums); } catch { }
+                            adopted = true; reason = $"ui-numeric({uiNums.Count})>cur({curNums.Count})";
+                        }
+                        else if (string.IsNullOrWhiteSpace(curKey))
+                        {
+                            // No current route: adopt UI as-is
+                            existing.RouteKey = rec.RouteKey;
+                            adopted = true; reason = "ui-override-empty";
+                        }
+
+                        // Update RouteShort if UI textual route seems more informative (more tokens)
+                        try
+                        {
+                            var uiTokens = (rec.RouteKey ?? string.Empty).Split('>').Select(s => s.Trim()).Where(s => s.Length > 0).ToList();
+                            var curShort = (existing.Extra != null && existing.Extra.TryGetValue("RouteShort", out var rs)) ? rs : curKey;
+                            var curTokens = (curShort ?? string.Empty).Split('>').Select(s => s.Trim()).Where(s => s.Length > 0).ToList();
+                            if (uiNums.Count == 0 && uiTokens.Count > curTokens.Count)
+                            {
+                                if (existing.Extra == null) existing.Extra = new System.Collections.Generic.Dictionary<string, string>(System.StringComparer.Ordinal);
+                                existing.Extra["RouteShort"] = rec.RouteKey;
+                                reason = adopted ? ($"{reason}+ui-text-short({uiTokens.Count})") : $"ui-text-short({uiTokens.Count})";
+                                adopted = true;
+                            }
+                        }
+                        catch { }
+
+                        try { Services.XsrDebug.Log(Config, adopted ? $"Adopted UI route: slot={existing.Slot ?? 0}, reason={reason}, ui='{rec.RouteKey}', cur='{curKey}'" : $"UI route ignored: ui='{rec.RouteKey}', cur='{curKey}'"); } catch { }
+                    }
+                    catch { }
+                }
             }
             return snapshot.Items.Count > 0;
         }
@@ -1851,6 +2586,15 @@ public sealed partial class Plugin : IDalamudPlugin
         catch { }
 
         if (!Config.AutoCaptureOnWorkshopOpen) return;
+        // Territory gate: 工房内のみ自動取得
+        try
+        {
+            if (Config.EnableTerritoryGate)
+            {
+                unsafe { if (FFXIVClientStructs.FFXIV.Client.Game.HousingManager.Instance()->WorkshopTerritory == null) return; }
+            }
+        }
+        catch { }
         // Addon名が未設定でも、自動検出して可視状態を確認する
         var name = Config.AddonName;
         if (string.IsNullOrWhiteSpace(name))
@@ -1875,20 +2619,55 @@ public sealed partial class Plugin : IDalamudPlugin
         {
             var unit = ResolveAddonPtr(name);
             bool visible = unit != null && unit->IsVisible;
+            if (Config.EnableAddonGate && !visible) { _wasAddonVisible = false; _deferredCaptureFrames = 0; _deferredCaptureFrames2 = 0; return; }
             if (visible && (!_wasAddonVisible || (DateTime.UtcNow - _lastAutoCaptureUtc) > TimeSpan.FromSeconds(10)))
             {
                 if (!_notifiedThisVisibility)
                 {
+                    // Addon 可視化直後: 1～2フレーム遅延でメモリキャプチャ（ArrayData/内部構造が安定するタイミングを狙う）
+                    _deferredAddonName = name;
+                    _deferredCaptureFrames = 2;
+                    _deferredCaptureFrames2 = 10; // 追加の再試行
                     SubmarineSnapshot? snap;
                     bool ok = false;
-                    try { ok = TryCaptureFromAddon(name, out snap); } catch { snap = null; }
-                    if (!ok)
+                    if (Config.MemoryOnlyMode)
                     {
                         try { ok = TryCaptureFromMemory(out snap); } catch { snap = null; }
+                    }
+                    else
+                    {
+                        try { ok = TryCaptureFromAddon(name, out snap); } catch { snap = null; }
+                        if (!ok)
+                        {
+                            try { ok = TryCaptureFromMemory(out snap); } catch { snap = null; }
+                        }
                     }
                     if (ok && snap != null)
                     {
                         try { EtaFormatter.Enrich(snap); } catch { }
+                        // MemoryOnly の場合は UI 追補を行わない
+                        if (!Config.MemoryOnlyMode)
+                        {
+                            // Try to enrich from visible workshop panels even after memory capture
+                            try
+                            {
+                                if (EnrichFromWorkshopPanels(snap))
+                                {
+                                    try
+                                    {
+                                        snap.Items = snap.Items
+                                            .OrderBy(x => x.DurationMinutes.HasValue ? 0 : 1)
+                                            .ThenBy(x => x.DurationMinutes ?? int.MaxValue)
+                                            .ThenBy(x => x.Name, StringComparer.Ordinal)
+                                            .Take(4)
+                                            .ToList();
+                                    }
+                                    catch { }
+                                    try { Services.XsrDebug.Log(Config, "Enriched snapshot from workshop panels after capture"); } catch { }
+                                }
+                            }
+                            catch { }
+                        }
                         try { TryAdoptPreviousRoutes(snap); } catch { }
                         try { _alarm?.UpdateSnapshot(snap); } catch { }
                         BridgeWriter.WriteIfChanged(snap);
@@ -1902,10 +2681,236 @@ public sealed partial class Plugin : IDalamudPlugin
             }
             _wasAddonVisible = visible;
             if (!visible) _notifiedThisVisibility = false; // 非可視に戻ったらリセット
+
+            // 遅延キャプチャの実行
+            try
+            {
+                if (visible && _deferredCaptureFrames > 0)
+                {
+                    _deferredCaptureFrames--;
+                    if (_deferredCaptureFrames == 0)
+                    {
+                        bool changed = false;
+                        if (Config.PreferArrayDataFirst)
+                        {
+                            try { if (TryAdoptFromAddonArrays(unit)) changed = true; } catch { }
+                        }
+                        if (!changed && TryCaptureFromMemory(out var snapDefer) && snapDefer != null)
+                        {
+                            try { EtaFormatter.Enrich(snapDefer); } catch { }
+                            BridgeWriter.WriteIfChanged(snapDefer);
+                            try { Services.XsrDebug.Log(Config, $"DeferredCapture phase=event-defer2 addon={_deferredAddonName}"); } catch { }
+                        }
+                    }
+                }
+                if (visible && _deferredCaptureFrames2 > 0)
+                {
+                    _deferredCaptureFrames2--;
+                    if (_deferredCaptureFrames2 == 0)
+                    {
+                        bool changed = false;
+                        if (Config.PreferArrayDataFirst)
+                        {
+                            try { if (TryAdoptFromAddonArrays(unit)) changed = true; } catch { }
+                        }
+                        if (!changed && TryCaptureFromMemory(out var snapDefer2) && snapDefer2 != null)
+                        {
+                            try { EtaFormatter.Enrich(snapDefer2); } catch { }
+                            BridgeWriter.WriteIfChanged(snapDefer2);
+                            try { Services.XsrDebug.Log(Config, $"DeferredCapture phase=event-defer10 addon={_deferredAddonName}"); } catch { }
+                        }
+                    }
+                }
+            }
+            catch { }
         }
         catch (Exception ex)
         {
             _log.Warning(ex, "OnFrameworkUpdate auto-capture error");
         }
+    }
+
+    // Addonのメモリ（ArrayData等）を起点に、tail を含む 3..5 連続値を探索し、採用（UI文字列は不使用）
+    private unsafe bool TryAdoptFromAddonArrays(FFXIVClientStructs.FFXIV.Component.GUI.AtkUnitBase* unit)
+    {
+        try
+        {
+            if (unit == null) return false;
+            var hm = HousingManager.Instance(); if (hm == null) return false;
+            var wt = hm->WorkshopTerritory; if (wt == null) return false;
+
+            // まず通常メモリキャプチャを行い、足りないスロットだけを補う
+            if (!TryCaptureFromMemory(out var snap) || snap == null || snap.Items == null) return false;
+
+            byte* basePtr = (byte*)unit;
+            int scanSize = 8192; // Addon周辺の限定スキャン
+
+            bool anyChanged = false;
+            foreach (var rec in snap.Items)
+            {
+                try
+                {
+                    int slot = rec.Slot ?? 0; if (slot <= 0 || slot > 4) continue;
+
+                    // tail 取得（CurrentExplorationPoints）
+                    var subsBase = (HousingWorkshopSubmersibleSubData*)(&wt->Submersible);
+                    var s = wt->Submersible.DataPointers[slot - 1].Value;
+                    if ((nint)s == 0) s = (FFXIVClientStructs.FFXIV.Client.Game.HousingWorkshopSubmersibleSubData*)(subsBase + (slot - 1));
+                    if ((nint)s == 0) continue;
+                    var tail = new System.Collections.Generic.List<byte>(5);
+                    for (int j = 0; j < 5; j++)
+                    {
+                        byte v = s->CurrentExplorationPoints[j];
+                        if (v == 0) break; if (v >= 1 && v <= 255) tail.Add(v);
+                    }
+                    var existing = ParseRouteNumbers(rec.RouteKey ?? string.Empty);
+                    if (existing.Count >= 3) continue; // 既にフル
+
+                    // Addonメモリ領域をスキャン（位相/lenhdr対応）
+                    var cands = ScanRouteCandidatesFromRaw(basePtr, scanSize, tail, maxReturn: 3);
+                    if (cands.Count == 0) continue;
+                    var best = cands[0];
+
+                    var nums = best.Sequence;
+                    if (nums != null && nums.Count >= Math.Max(3, Config.MemoryRouteMinCount))
+                    {
+                        rec.RouteKey = BuildRouteKeyFromNumbers(nums);
+                        if (rec.Extra == null) rec.Extra = new System.Collections.Generic.Dictionary<string, string>(System.StringComparer.Ordinal);
+                        rec.Extra["RouteShort"] = BuildRouteShortFromNumbers(nums);
+                        try { SaveCache(slot, nums); } catch { }
+                        try { SaveLastGoodRoute(slot, nums, RouteConfidence.Array, "array"); } catch { }
+                        anyChanged = true;
+                        try { Services.XsrDebug.Log(Config, $"S{slot} array adopt: phase={best.Phase}, off=0x{best.Offset:X}, stride={best.Stride}, seq=[{string.Join(",", nums)}]"); } catch { }
+                        try
+                        {
+                            var cached = TryGetCachedNumbers(slot);
+                            LogRouteAdoption(slot, new System.Collections.Generic.List<int>(), cached ?? new System.Collections.Generic.List<int>(), nums, cached != null && cached.SequenceEqual(nums), "array", best.Phase, best.Offset, best.Stride, best.Reversed);
+                        }
+                        catch { }
+                    }
+                }
+                catch { }
+            }
+
+            if (anyChanged)
+            {
+                try { EtaFormatter.Enrich(snap); } catch { }
+                BridgeWriter.WriteIfChanged(snap);
+            }
+            return anyChanged;
+        }
+        catch { return false; }
+    }
+
+    private unsafe System.Collections.Generic.List<RouteCandidate> ScanRouteCandidatesFromRaw(byte* basePtr, int structSize, System.Collections.Generic.List<byte> tailBytes, int maxReturn)
+    {
+        var results = new System.Collections.Generic.List<RouteCandidate>();
+        try
+        {
+            int minCnt = Math.Max(3, Config.MemoryRouteMinCount);
+            int maxCnt = Math.Max(minCnt, Config.MemoryRouteMaxCount);
+            var tail = new System.Collections.Generic.List<int>(tailBytes?.Count ?? 0);
+            if (tailBytes != null) foreach (var b in tailBytes) tail.Add((int)b);
+            var tailR = ReverseCopy(tail);
+            int[] strides = new[] { 1, 2, 4 };
+            // Pass A/C: 0終端 or 位相ずらし
+            for (int si = 0; si < strides.Length; si++)
+            {
+                int stride = strides[si];
+                for (int off = 0; off < structSize; off++)
+                {
+                    var cand = new System.Collections.Generic.List<int>(maxCnt);
+                    for (int k = 0; k < maxCnt; k++)
+                    {
+                        int pos = off + k * stride; if (pos >= structSize) break;
+                        byte v = *(basePtr + pos);
+                        if (v == 0) { if (Config.MemoryRouteZeroTerminated) break; else continue; }
+                        if (v < 1 || v > 255) { cand.Clear(); break; }
+                        cand.Add(v);
+                    }
+                    if (cand.Count < minCnt) continue;
+                    int score = 0; bool rev = false; bool hasTail = false;
+                    if (tail.Count > 0)
+                    {
+                        if (ContainsContiguousSubsequence(cand, tail)) { score += 20 + 3 * tail.Count; hasTail = true; }
+                        if (IsSuffix(cand, tail)) { score += 40 + 4 * tail.Count; hasTail = true; }
+                        if (ContainsContiguousSubsequence(cand, tailR)) { score += 18 + 2 * tail.Count; hasTail = true; rev = true; }
+                        if (IsSuffix(cand, tailR)) { score += 36 + 3 * tail.Count; hasTail = true; rev = true; }
+                    }
+                    else { hasTail = true; }
+                    if (!hasTail) continue;
+                    score += cand.Count;
+                    results.Add(new RouteCandidate { Offset = off, Stride = stride, Reversed = rev, Score = score, Sequence = cand, Phase = "array-window" });
+                }
+                // 位相
+                if (Config.MemoryScanPhaseEnabled)
+                {
+                    for (int bytePhase = 1; bytePhase < stride; bytePhase++)
+                    {
+                        for (int off = 0; off < structSize; off++)
+                        {
+                            var cand = new System.Collections.Generic.List<int>(maxCnt);
+                            for (int k = 0; k < maxCnt; k++)
+                            {
+                                int pos = off + k * stride + bytePhase; if (pos >= structSize) break;
+                                byte v = *(basePtr + pos);
+                                if (v == 0) { if (Config.MemoryRouteZeroTerminated) break; else continue; }
+                                if (v < 1 || v > 255) { cand.Clear(); break; }
+                                cand.Add(v);
+                            }
+                            if (cand.Count < minCnt) continue;
+                            int score = 0; bool rev = false; bool hasTail = false;
+                            if (tail.Count > 0)
+                            {
+                                if (ContainsContiguousSubsequence(cand, tail)) { score += 20 + 3 * tail.Count; hasTail = true; }
+                                if (IsSuffix(cand, tail)) { score += 40 + 4 * tail.Count; hasTail = true; }
+                                if (ContainsContiguousSubsequence(cand, tailR)) { score += 18 + 2 * tail.Count; hasTail = true; rev = true; }
+                                if (IsSuffix(cand, tailR)) { score += 36 + 3 * tail.Count; hasTail = true; rev = true; }
+                            }
+                            else { hasTail = true; }
+                            if (!hasTail) continue;
+                            score += cand.Count;
+                            results.Add(new RouteCandidate { Offset = off, Stride = stride, Reversed = rev, Score = score, Sequence = cand, Phase = $"array-phase{stride}.{bytePhase}" });
+                        }
+                    }
+                }
+                // 長さヘッダ
+                if (Config.MemoryScanPhaseEnabled)
+                {
+                    for (int off = 0; off < structSize; off++)
+                    {
+                        int posLen = off; if (posLen >= structSize) break;
+                        byte len = *(basePtr + posLen);
+                        if (len < minCnt || len > maxCnt) continue;
+                        var cand = new System.Collections.Generic.List<int>(len);
+                        bool bad = false;
+                        for (int k = 0; k < len; k++)
+                        {
+                            int pos = off + (k + 1) * stride; if (pos >= structSize) { bad = true; break; }
+                            byte v = *(basePtr + pos);
+                            if (v < 1 || v > 255) { bad = true; break; }
+                            cand.Add(v);
+                        }
+                        if (bad || cand.Count < minCnt) continue;
+                        int score = 0; bool rev = false; bool hasTail = false;
+                        if (tail.Count > 0)
+                        {
+                            if (ContainsContiguousSubsequence(cand, tail)) { score += 20 + 3 * tail.Count; hasTail = true; }
+                            if (IsSuffix(cand, tail)) { score += 40 + 4 * tail.Count; hasTail = true; }
+                            if (ContainsContiguousSubsequence(cand, tailR)) { score += 18 + 2 * tail.Count; hasTail = true; rev = true; }
+                            if (IsSuffix(cand, tailR)) { score += 36 + 3 * tail.Count; hasTail = true; rev = true; }
+                        }
+                        else { hasTail = true; }
+                        if (!hasTail) continue;
+                        score += cand.Count;
+                        results.Add(new RouteCandidate { Offset = off, Stride = stride, Reversed = rev, Score = score, Sequence = cand, Phase = "array-lenhdr" });
+                    }
+                }
+            }
+            results.Sort((a, b) => b.Score.CompareTo(a.Score));
+            if (maxReturn > 0 && results.Count > maxReturn) results.RemoveRange(maxReturn, results.Count - maxReturn);
+            return results;
+        }
+        catch { return results; }
     }
 }
