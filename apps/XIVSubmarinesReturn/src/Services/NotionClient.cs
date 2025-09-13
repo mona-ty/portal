@@ -161,6 +161,17 @@ namespace XIVSubmarinesReturn.Services
                 }
                 else
                 {
+                    // Database might have been re-provisioned during the query path; ensure we use a valid/current DB id
+                    var exists = await CheckDatabaseExistsAsync(databaseId, ct).ConfigureAwait(false);
+                    if (!exists)
+                    {
+                        var ok = await EnsureProvisionedAsync(snap, ct).ConfigureAwait(false);
+                        if (ok)
+                        {
+                            var newId = ResolveDbIdForSnapshot(snap);
+                            if (!string.IsNullOrWhiteSpace(newId)) databaseId = newId!;
+                        }
+                    }
                     await CreatePageAsync(databaseId, snap, it, extId, ct).ConfigureAwait(false);
                 }
             }

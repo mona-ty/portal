@@ -45,6 +45,23 @@ namespace XIVSubmarinesReturn.Services
         {
             try
             {
+                // Enrich identity from active profile if missing
+                try
+                {
+                    if (string.IsNullOrWhiteSpace(snap.Character) || string.IsNullOrWhiteSpace(snap.FreeCompany))
+                    {
+                        var key = _cfg.ActiveContentId;
+                        var prof = (_cfg.Profiles ?? new List<XIVSubmarinesReturn.CharacterProfile>()).FirstOrDefault(p => key.HasValue && p.ContentId == key.Value) 
+                                   ?? (_cfg.Profiles?.FirstOrDefault());
+                        if (prof != null)
+                        {
+                            if (string.IsNullOrWhiteSpace(snap.Character)) snap.Character = prof.CharacterName;
+                            if (string.IsNullOrWhiteSpace(snap.FreeCompany)) snap.FreeCompany = prof.FreeCompanyName;
+                        }
+                    }
+                }
+                catch { }
+
                 string newKey = ComputeSnapshotKey(snap);
                 bool changed = false;
                 lock (_gate)
