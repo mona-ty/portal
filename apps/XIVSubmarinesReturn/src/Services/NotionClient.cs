@@ -159,6 +159,14 @@ namespace XIVSubmarinesReturn.Services
                 var token = _cfg.NotionToken;
                 var extId = BuildStableId(snap, it);
 
+                // Always re-resolve DB ID before each item to avoid using stale ID captured earlier
+                try
+                {
+                    var cur = ResolveDbIdForSnapshot(snap);
+                    if (!string.IsNullOrWhiteSpace(cur)) databaseId = cur!;
+                }
+                catch { }
+
                 var pageId = await TryFindPageIdByExtIdAsync(databaseId, extId, ct).ConfigureAwait(false);
                 if (!string.IsNullOrEmpty(pageId))
                 {
@@ -166,9 +174,8 @@ namespace XIVSubmarinesReturn.Services
                 }
                 else
                 {
-                    // Database might have been re-provisioned during the query path; ensure we use a valid/current DB id
-                    var exists = await CheckDatabaseExistsAsync(databaseId, ct).ConfigureAwait(false);
-                    if (!exists)
+                    // Ensure we have a valid DB (query may have been 404); refresh mapping proactively
+                    try
                     {
                         var ok = await EnsureProvisionedAsync(snap, ct).ConfigureAwait(false);
                         if (ok)
@@ -177,6 +184,7 @@ namespace XIVSubmarinesReturn.Services
                             if (!string.IsNullOrWhiteSpace(newId)) databaseId = newId!;
                         }
                     }
+                    catch { }
                     await CreatePageAsync(databaseId, snap, it, extId, ct).ConfigureAwait(false);
                 }
             }
